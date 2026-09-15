@@ -1,0 +1,15 @@
+fastapi[standard]
+sqlalchemy
+pymysql
+pydantic-settings
+python-jose[cryptography]
+bcrypt
+google-auth
+email-validator
+requests
+beautifulsoup4
+lxml
+python-dateutil
+python-dotenv
+pytest
+httpx

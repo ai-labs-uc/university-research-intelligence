@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/*
+ * University of the Cordilleras brand green.
+ * uc-700 (#09593C) is UC's actual brand color, sourced from
+ * uc-bcf.edu.ph's own theme-color metadata (matches "Forest Green" in
+ * UC's public Wikipedia infobox) — not a generic green pick. The rest
+ * of the ramp is a standard tint/shade progression built around it so
+ * the whole app (sidebar, buttons, links, active states) reads as one
+ * consistent brand color instead of scattered ad-hoc greens.
+ */
+@theme {
+  --color-uc-50: #eaf4ef;
+  --color-uc-100: #cfe6d9;
+  --color-uc-200: #a3cdb8;
+  --color-uc-300: #72b394;
+  --color-uc-400: #46966f;
+  --color-uc-500: #2c7a58;
+  --color-uc-600: #1c6347;
+  --color-uc-700: #09593c;
+  --color-uc-800: #07452f;
+  --color-uc-900: #063523;
+  --color-uc-950: #042016;
+}
+
+body {
+  margin: 0;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
