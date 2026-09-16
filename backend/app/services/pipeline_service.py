@@ -1,215 +1,223 @@
-from datetime import datetime
-from sqlalchemy import text
+def run_pipeline(db):
+    """
+    Main ETL pipeline runner.
+
+    Collects sources, classifies opportunities,
+    updates grants, and stores CFP records.
+    """
+
+    from app.etl.collector import collect_source
+    from app.etl.sources import SOURCES
+    from app.etl.classifier import classify_type
+
+    from datetime import datetime
+
+
+    inserted = 0
+    updated = 0
+
+
+    for source in SOURCES:
+
+        try:
 
+            items = collect_source(source)
 
-def process_opportunity(
-    db,
-    source_id,
-    item,
-    classify_type
-):
 
-    combined_text = " ".join([
-        item.get("title",""),
-        item.get("summary",""),
-        item.get("organization",""),
-        item.get("keywords","")
-    ])
+            for item in items:
 
+                combined_text = " ".join([
+                    item.get("title", ""),
+                    item.get("summary", ""),
+                    item.get("organization", "")
+                ])
 
-    opportunity_type = classify_type(combined_text)
 
+                opportunity_type = classify_type(
+                    combined_text
+                )
 
-    # Ignore unknown records
-    if opportunity_type is None:
-        return
 
+                # Ignore unknown content
+                if opportunity_type is None:
+                    continue
 
-    scope_type = opportunity_type
 
+                scope_type = opportunity_type
 
-    discipline = item.get(
-        "discipline",
-        ""
-    )
 
+                now = datetime.utcnow()
 
-    indexing_database = item.get(
-        "indexing_database",
-        ""
-    )
 
+                db.execute(
+                    """
+                    INSERT INTO research_opportunities
+                    (
+                        source_id,
+                        opportunity_type,
+                        scope_type,
+                        title,
+                        organization,
+                        summary,
+                        eligibility,
+                        topics,
+                        discipline,
+                        indexing_database,
+                        country,
+                        deadline,
+                        source_url,
+                        canonical_url,
+                        content_hash,
+                        status,
+                        verification_status,
+                        is_current,
+                        last_seen,
+                        discovered_at,
+                        updated_at
+                    )
 
-    now = datetime.utcnow()
+                    VALUES
+                    (
+                        :source_id,
+                        :opportunity_type,
+                        :scope_type,
+                        :title,
+                        :organization,
+                        :summary,
+                        :eligibility,
+                        :topics,
+                        :discipline,
+                        :indexing_database,
+                        :country,
+                        :deadline,
+                        :source_url,
+                        :canonical_url,
+                        :content_hash,
+                        :status,
+                        :verification_status,
+                        1,
+                        :last_seen,
+                        :discovered_at,
+                        :updated_at
+                    )
 
+                    ON DUPLICATE KEY UPDATE
 
-    sql = text("""
-    INSERT INTO research_opportunities
-    (
-        source_id,
-        opportunity_type,
-        scope_type,
+                    title=:title,
+                    summary=:summary,
+                    deadline=:deadline,
+                    last_seen=:last_seen,
+                    updated_at=:updated_at
 
-        title,
-        organization,
+                    """,
+                    {
 
-        summary,
-        eligibility,
+                    "source_id":
+                    source.get("id"),
 
-        topics,
-        discipline,
-        indexing_database,
 
-        country,
+                    "opportunity_type":
+                    opportunity_type,
 
-        deadline,
 
-        source_url,
-        canonical_url,
+                    "scope_type":
+                    scope_type,
 
-        content_hash,
 
-        status,
-        verification_status,
+                    "title":
+                    item.get("title"),
 
-        is_current,
-        last_seen,
 
-        discovered_at,
-        updated_at
+                    "organization":
+                    item.get("organization"),
 
-    )
 
-    VALUES
+                    "summary":
+                    item.get("summary"),
 
-    (
-        :source_id,
-        :opportunity_type,
-        :scope_type,
 
-        :title,
-        :organization,
+                    "eligibility":
+                    item.get("eligibility"),
 
-        :summary,
-        :eligibility,
 
-        :topics,
-        :discipline,
-        :indexing_database,
+                    "topics":
+                    item.get("topics"),
 
-        :country,
 
-        :deadline,
+                    "discipline":
+                    item.get("discipline"),
 
-        :source_url,
-        :canonical_url,
 
-        :content_hash,
+                    "indexing_database":
+                    item.get("indexing_database"),
 
-        :status,
-        :verification_status,
 
-        1,
-        :last_seen,
+                    "country":
+                    item.get("country"),
 
-        :created,
-        :updated
-    )
 
-    ON DUPLICATE KEY UPDATE
+                    "deadline":
+                    item.get("deadline"),
 
-        title=:title,
-        summary=:summary,
-        deadline=:deadline,
 
-        is_current=1,
-        last_seen=:last_seen,
+                    "source_url":
+                    item.get("source_url"),
 
-        updated_at=:updated
 
-    """)
+                    "canonical_url":
+                    item.get("canonical_url"),
 
 
-    db.execute(
-        sql,
-        {
+                    "content_hash":
+                    item.get("content_hash"),
 
-        "source_id":source_id,
 
-        "opportunity_type":
-            opportunity_type,
+                    "status":
+                    "OPEN",
 
-        "scope_type":
-            scope_type,
 
+                    "verification_status":
+                    "VERIFIED",
 
-        "title":
-            item.get("title"),
 
+                    "last_seen":
+                    now,
 
-        "organization":
-            item.get("organization"),
 
+                    "discovered_at":
+                    now,
 
-        "summary":
-            item.get("summary"),
 
+                    "updated_at":
+                    now
 
-        "eligibility":
-            item.get("eligibility"),
+                    }
+                )
 
 
-        "topics":
-            item.get("topics"),
+                inserted += 1
 
 
-        "discipline":
-            discipline,
 
+            db.commit()
 
-        "indexing_database":
-            indexing_database,
 
 
-        "country":
-            item.get("country"),
+        except Exception as e:
 
+            print(
+                "Pipeline error:",
+                source,
+                e
+            )
 
-        "deadline":
-            item.get("deadline"),
 
+    return {
 
-        "source_url":
-            item.get("source_url"),
+        "status": "completed",
 
+        "inserted": inserted,
 
-        "canonical_url":
-            item.get("canonical_url"),
+        "updated": updated
 
-
-        "content_hash":
-            item.get("content_hash"),
-
-
-        "status":
-            "OPEN",
-
-
-        "verification_status":
-            "VERIFIED",
-
-
-        "last_seen":
-            now,
-
-
-        "created":
-            now,
-
-
-        "updated":
-            now
-        }
-    )
-
-    db.commit()
+    }
