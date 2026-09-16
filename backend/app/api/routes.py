@@ -3,16 +3,12 @@ from sqlalchemy.orm import Session
 
 from fastapi import Depends, APIRouter
 
-from app.database import get_db
+from app.core.database import get_db
 
 
 router = APIRouter()
 
 
-
-# ============================================================
-# ALL OPPORTUNITIES
-# ============================================================
 
 @router.get("/opportunities")
 def opportunities(
@@ -31,40 +27,23 @@ def opportunities(
                 o.organization
             ) AS source_name
 
-
         FROM research_opportunities o
 
-
         LEFT JOIN opportunity_sources s
-
         ON s.id = o.source_id
 
+        WHERE o.is_current = 1
 
-        WHERE
-
-            o.is_current = 1
-
-
-        ORDER BY
-
-            o.id DESC
-
+        ORDER BY o.id DESC
 
         LIMIT 500
         """
         )
     )
 
-
     return result.mappings().all()
 
 
-
-
-
-# ============================================================
-# GRANTS
-# ============================================================
 
 @router.get("/grants")
 def grants(
@@ -83,14 +62,10 @@ def grants(
                 o.organization
             ) AS source_name
 
-
         FROM research_opportunities o
 
-
         LEFT JOIN opportunity_sources s
-
         ON s.id = o.source_id
-
 
         WHERE
 
@@ -98,27 +73,16 @@ def grants(
 
             AND o.category LIKE 'GRANT%'
 
-
-        ORDER BY
-
-            o.id DESC
-
+        ORDER BY o.id DESC
 
         LIMIT 500
         """
         )
     )
 
-
     return result.mappings().all()
 
 
-
-
-
-# ============================================================
-# CALL FOR PAPERS
-# ============================================================
 
 @router.get("/call-for-papers")
 def call_for_papers(
@@ -146,14 +110,10 @@ def call_for_papers(
                     o.organization
                 ) AS source_name
 
-
             FROM research_opportunities o
 
-
             LEFT JOIN opportunity_sources s
-
             ON s.id = o.source_id
-
 
             WHERE
 
@@ -161,22 +121,15 @@ def call_for_papers(
 
                 AND o.category = :category
 
-
-            ORDER BY
-
-                o.id DESC
-
+            ORDER BY o.id DESC
 
             LIMIT 500
             """
             ),
-
             {
                 "category": category
             }
-
         )
-
 
     else:
 
@@ -192,27 +145,18 @@ def call_for_papers(
                     o.organization
                 ) AS source_name
 
-
             FROM research_opportunities o
 
-
             LEFT JOIN opportunity_sources s
-
             ON s.id = o.source_id
-
 
             WHERE
 
                 o.is_current = 1
 
-                AND o.category LIKE
-                'CALL_FOR_PAPER%'
+                AND o.category LIKE 'CALL_FOR_PAPER%'
 
-
-            ORDER BY
-
-                o.id DESC
-
+            ORDER BY o.id DESC
 
             LIMIT 500
             """
