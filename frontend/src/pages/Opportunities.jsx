@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../api/client";
 
 const TABS = [
@@ -12,11 +12,11 @@ const TABS = [
   },
   {
     key: "CALL_FOR_PAPER_NATIONAL",
-    label: "National Call for Papers",
+    label: "National CFP",
   },
   {
     key: "CALL_FOR_PAPER_INTERNATIONAL",
-    label: "International Call for Papers",
+    label: "International CFP",
   },
 ];
 
@@ -36,21 +36,41 @@ export default function Opportunities() {
       });
   }, []);
 
+  const getCategory = (item) => {
+    return item.category || item.opportunity_type || "";
+  };
+
+  const counts = useMemo(() => {
+    return {
+      ALL: items.length,
+
+      GRANT: items.filter((x) => getCategory(x).startsWith("GRANT")).length,
+
+      CALL_FOR_PAPER_NATIONAL: items.filter(
+        (x) => getCategory(x) === "CALL_FOR_PAPER_NATIONAL",
+      ).length,
+
+      CALL_FOR_PAPER_INTERNATIONAL: items.filter(
+        (x) => getCategory(x) === "CALL_FOR_PAPER_INTERNATIONAL",
+      ).length,
+    };
+  }, [items]);
+
   const filtered = items.filter((item) => {
+    const category = getCategory(item);
+
     if (tab === "ALL") return true;
 
-    if (tab === "GRANT") {
-      return item.category?.startsWith("GRANT");
-    }
+    if (tab === "GRANT") return category.startsWith("GRANT");
 
-    return item.category === tab;
+    return category === tab;
   });
 
   return (
     <div>
       <h1 className="text-3xl font-bold">Research Opportunities</h1>
 
-      <div className="flex gap-3 mt-5">
+      <div className="flex gap-3 mt-5 flex-wrap">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -62,6 +82,10 @@ export default function Opportunities() {
             }
           >
             {t.label}
+
+            {" ("}
+            {counts[t.key]}
+            {")"}
           </button>
         ))}
       </div>
@@ -73,9 +97,7 @@ export default function Opportunities() {
 
             <p>{item.organization}</p>
 
-            <p className="text-sm text-gray-500">{item.category}</p>
-
-            <p className="mt-3">{item.summary?.substring(0, 300)}</p>
+            <p className="text-sm text-gray-500">{getCategory(item)}</p>
           </div>
         ))}
       </div>
