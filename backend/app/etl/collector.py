@@ -8,111 +8,60 @@ from app.etl.utils import clean_text
 
 
 HEADERS = {
-
     "User-Agent":
-        (
-            "Mozilla/5.0 "
-            "(Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 "
-            "Chrome/120 Safari/537.36"
-        )
-
+        "Mozilla/5.0 Research-Intelligence-System/1.0"
 }
 
 
-
-# Pages that are not opportunities
-
-BLOCKED_PATHS = [
-
-    "/about",
-    "/contact",
-    "/privacy",
-    "/terms",
-    "/category",
-    "/tag",
-    "/author",
-    "/page",
-
-]
-
-
-
-BLOCKED_TITLES = [
-
-    "home",
+BLOCKED_WORDS = [
 
     "news",
-
-    "latest news",
-
-    "calls and events",
-
-    "events",
-
     "announcement",
-
     "announcements",
-
     "memorandum",
-
-    "issuances",
-
+    "issuance",
     "contact",
-
-    "about us",
+    "about",
+    "privacy",
+    "terms",
+    "calls and events",
+    "events",
 
 ]
 
 
-
-def valid_url(url):
-
-
-    lower = url.lower()
-
-
-    for path in BLOCKED_PATHS:
-
-        if path in lower:
-
-            return False
-
-
-    return True
-
-
-
-
-def get_page(url):
-
+def fetch_html(url):
 
     response = requests.get(
-
         url,
-
         headers=HEADERS,
-
         timeout=30,
-
         verify=False
-
     )
 
-
     response.raise_for_status()
-
 
     return response.text
 
 
 
+def valid_title(title):
+
+    value = title.lower().strip()
+
+    for word in BLOCKED_WORDS:
+
+        if value == word:
+
+            return False
+
+    return True
 
 
-def discover_links(source: dict):
 
+def discover_links(source):
 
-    html = get_page(
+    html = fetch_html(
         source["listing_url"]
     )
 
@@ -128,6 +77,8 @@ def discover_links(source: dict):
     ).netloc
 
 
+    links = set()
+
 
     keywords = source.get(
         "keywords",
@@ -135,25 +86,15 @@ def discover_links(source: dict):
     )
 
 
-
-    links = set()
-
-
-
     for a in soup.find_all(
         "a",
         href=True
     ):
 
-
         url = urljoin(
-
             source["listing_url"],
-
             a["href"]
-
         )
-
 
 
         if urlsplit(url).netloc != host:
@@ -162,36 +103,20 @@ def discover_links(source: dict):
 
 
 
-        if not valid_url(url):
-
-            continue
-
-
-
         text = clean_text(
-
             a.get_text(
                 " ",
                 strip=True
             )
-
         ).lower()
 
 
 
-        # If source has keywords,
-        # require matching link text
-
         if keywords:
 
-
             if not any(
-
-                keyword.lower()
-                in text
-
-                for keyword in keywords
-
+                k.lower() in text
+                for k in keywords
             ):
 
                 continue
@@ -208,66 +133,50 @@ def discover_links(source: dict):
 
 
 
-
 def fetch_page(url):
 
-
-    html = get_page(url)
-
+    html = fetch_html(url)
 
 
     soup = BeautifulSoup(
-
         html,
-
         "lxml"
-
     )
-
 
 
     title_node = (
-
         soup.find("h1")
-
         or
-
         soup.find("title")
-
     )
-
 
 
     title = clean_text(
 
         title_node.get_text(
-
             " ",
-
             strip=True
-
         )
-
         if title_node
-
         else ""
 
     )
+
+
+    if not valid_title(title):
+
+        return "", ""
 
 
 
     content = clean_text(
 
         soup.get_text(
-
             "\n",
-
             strip=True
-
         )
 
     )
-
 
 
     return title, content

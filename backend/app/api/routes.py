@@ -25,12 +25,12 @@ def dashboard(db: Session = Depends(get_db)):
 
     call_for_paper_count = db.execute(text('''
         SELECT COUNT(*) FROM research_opportunities
-        WHERE opportunity_type='CALL_FOR_PAPER'
+        WHERE category LIKE 'CALL_FOR_PAPER%'
     ''')).scalar_one()
 
     grant_count = db.execute(text('''
         SELECT COUNT(*) FROM research_opportunities
-        WHERE opportunity_type='GRANT'
+        WHERE category LIKE 'GRANT%'
     ''')).scalar_one()
 
     active_sources = db.execute(

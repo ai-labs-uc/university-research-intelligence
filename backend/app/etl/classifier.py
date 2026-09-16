@@ -1,32 +1,6 @@
 import re
 
 
-GRANT_SOURCE_KEYWORDS = [
-
-    "dost",
-    "pcieerd",
-    "pchrd",
-    "pcaarrd",
-    "tapi",
-
-    "department of agriculture",
-    "da",
-
-    "ched",
-    "commission on higher education",
-
-    "denr",
-
-    "nih",
-    "national science foundation",
-    "nsf",
-
-    "horizon europe",
-    "world bank",
-    "unesco"
-
-]
-
 
 GRANT_KEYWORDS = [
 
@@ -34,15 +8,9 @@ GRANT_KEYWORDS = [
 
     "grant program",
 
-    "grant opportunity",
-
     "funding opportunity",
 
     "research funding",
-
-    "funding support",
-
-    "funded project",
 
     "call for proposal",
 
@@ -54,15 +22,47 @@ GRANT_KEYWORDS = [
 
     "grants-in-aid",
 
-    "project proposal",
+    "project funding",
 
-    "research project funding"
+    "financial support",
 
 ]
 
 
 
-INTERNATIONAL_CFP_KEYWORDS = [
+GRANT_ORGANIZATIONS = [
+
+    "dost",
+
+    "pcieerd",
+
+    "pchrd",
+
+    "pcaarrd",
+
+    "ched",
+
+    "commission on higher education",
+
+    "department of agriculture",
+
+    "denr",
+
+    "tapi",
+
+    "nih",
+
+    "nsf",
+
+    "horizon europe",
+
+    "world bank",
+
+]
+
+
+
+INTERNATIONAL_CFP = [
 
     "scopus",
 
@@ -74,8 +74,6 @@ INTERNATIONAL_CFP_KEYWORDS = [
 
     "ieee",
 
-    "ieee xplore",
-
     "acm",
 
     "springer",
@@ -84,13 +82,9 @@ INTERNATIONAL_CFP_KEYWORDS = [
 
     "wiley",
 
-    "taylor and francis",
-
     "mdpi",
 
     "international conference",
-
-    "international symposium",
 
     "call for papers",
 
@@ -98,13 +92,11 @@ INTERNATIONAL_CFP_KEYWORDS = [
 
     "abstract submission",
 
-    "submit manuscript",
-
 ]
 
 
 
-NATIONAL_CFP_KEYWORDS = [
+NATIONAL_CFP = [
 
     "philippine conference",
 
@@ -114,49 +106,18 @@ NATIONAL_CFP_KEYWORDS = [
 
     "university research conference",
 
-    "research conference",
-
     "philippine journal",
 
-    "local journal",
+    "research conference",
 
     "call for papers",
 
-    "paper submission",
-
-    "abstract submission"
-
 ]
 
-
-
-INVALID_PAGE_KEYWORDS = [
-
-    "calls and events",
-
-    "news",
-
-    "announcement",
-
-    "memorandum",
-
-    "issuance",
-
-    "contact",
-
-    "about us",
-
-    "homepage",
-
-]
 
 
 
 def normalize(text):
-
-    if not text:
-
-        return ""
 
     return re.sub(
         r"\s+",
@@ -166,13 +127,15 @@ def normalize(text):
 
 
 
+
+
 def classify_type(
     title,
     content,
     source_name=""
 ):
 
-    combined = normalize(
+    text = normalize(
         f"""
         {title}
         {content}
@@ -181,70 +144,47 @@ def classify_type(
     )
 
 
-    source = normalize(
-        source_name
-    )
 
-
-    # ----------------------------
-    # Ignore category pages
-    # ----------------------------
-
-    if title:
-
-        title_clean = normalize(title)
-
-        for bad in INVALID_PAGE_KEYWORDS:
-
-            if title_clean == bad:
-
-                return None
-
-
-
-    # ----------------------------
     # Grants first
-    # ----------------------------
 
-    for word in GRANT_SOURCE_KEYWORDS:
+    for word in GRANT_KEYWORDS:
 
-        if word in source:
-
-            for grant_word in GRANT_KEYWORDS:
-
-                if grant_word in combined:
-
-                    return "GRANT"
-
-
-
-    for grant_word in GRANT_KEYWORDS:
-
-        if grant_word in combined:
+        if word in text:
 
             return "GRANT"
 
 
 
-    # ----------------------------
+    for org in GRANT_ORGANIZATIONS:
+
+        if org in text:
+
+            if any(
+                x in text
+                for x in GRANT_KEYWORDS
+            ):
+
+                return "GRANT"
+
+
+
+
     # International CFP
-    # ----------------------------
 
-    for word in INTERNATIONAL_CFP_KEYWORDS:
+    for word in INTERNATIONAL_CFP:
 
-        if word in combined:
+        if word in text:
 
             return "CALL_FOR_PAPER_INTERNATIONAL"
 
 
 
-    # ----------------------------
+
     # National CFP
-    # ----------------------------
 
-    for word in NATIONAL_CFP_KEYWORDS:
+    for word in NATIONAL_CFP:
 
-        if word in combined:
+        if word in text:
 
             return "CALL_FOR_PAPER_NATIONAL"
 
