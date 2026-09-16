@@ -17,7 +17,21 @@ from app.etl.classifier import classify_type
 
 
 
-def generate_hash(value):
+BAD_PAGE_TITLES = [
+    "calls and events",
+    "news",
+    "announcement",
+    "announcements",
+    "memorandum",
+    "issuance",
+    "home",
+    "contact",
+    "about us",
+    "archive",
+]
+
+
+def generate_hash(value: str):
 
     return hashlib.sha256(
         value.encode("utf-8")
@@ -25,9 +39,39 @@ def generate_hash(value):
 
 
 
-def determine_category(opportunity_type):
+def determine_category(
+    opportunity_type,
+    source_name,
+    content
+):
+
+    text = (
+        f"{source_name} {content}"
+        .lower()
+    )
+
 
     if opportunity_type == "GRANT":
+
+        international_grants = [
+
+            "nih",
+            "nsf",
+            "horizon europe",
+            "world bank",
+            "unesco",
+            "european union",
+
+        ]
+
+
+        for item in international_grants:
+
+            if item in text:
+
+                return "GRANT_INTERNATIONAL"
+
+
 
         return "GRANT_PHILIPPINES"
 
@@ -49,53 +93,63 @@ def determine_category(opportunity_type):
 
 
 
+def is_bad_page(title):
+
+    if not title:
+
+        return True
 
 
-def detect_indexing(text):
+    title = title.lower().strip()
 
-    value = text.lower()
+
+    for item in BAD_PAGE_TITLES:
+
+        if title == item:
+
+            return True
+
+
+    return False
+
+
+
+def detect_indexing(content):
+
+    text = content.lower()
 
     indexes = []
 
 
-    if "scopus" in value:
+    if "scopus" in text:
 
         indexes.append("SCOPUS")
 
 
     if (
-        "web of science" in value
-        or "wos" in value
-        or "clarivate" in value
+        "web of science" in text
+        or "wos" in text
+        or "clarivate" in text
     ):
 
-        indexes.append(
-            "WEB_OF_SCIENCE"
-        )
+        indexes.append("WEB_OF_SCIENCE")
 
 
-    if "ieee" in value:
+    if "ieee" in text:
 
-        indexes.append(
-            "IEEE"
-        )
+        indexes.append("IEEE")
 
 
-    if "acm" in value:
+    if "acm" in text:
 
-        indexes.append(
-            "ACM"
-        )
+        indexes.append("ACM")
 
 
     return ",".join(indexes)
 
 
 
-
-
 def run_pipeline(db):
-
 
     print(
         "=== PIPELINE START ==="
@@ -103,11 +157,8 @@ def run_pipeline(db):
 
 
     discovered = 0
-
     inserted = 0
-
     updated = 0
-
 
 
     sources = (
@@ -117,6 +168,11 @@ def run_pipeline(db):
     )
 
 
+    print(
+        "Sources loaded:",
+        len(sources)
+    )
+
 
     try:
 
@@ -124,9 +180,15 @@ def run_pipeline(db):
         for source in sources:
 
 
+            source_name = source.get(
+                "name",
+                ""
+            )
+
+
             print(
-                "SOURCE:",
-                source.get("name")
+                "Processing source:",
+                source_name
             )
 
 
@@ -137,17 +199,26 @@ def run_pipeline(db):
                 )
 
 
+                print(
+                    "Links found:",
+                    len(links)
+                )
+
+
             except Exception as e:
 
 
                 print(
-                    "SOURCE ERROR:",
-                    e
+                    "Source failed:",
+                    source_name,
+                    str(e)
                 )
 
                 continue
 
 
+
+            # Limit per source for Render stability
 
             for url in links[:20]:
 
@@ -163,8 +234,9 @@ def run_pipeline(db):
 
 
                     print(
-                        "FETCH ERROR:",
-                        e
+                        "Fetch failed:",
+                        url,
+                        str(e)
                     )
 
                     continue
@@ -172,6 +244,17 @@ def run_pipeline(db):
 
 
                 discovered += 1
+
+
+
+                if is_bad_page(title):
+
+                    print(
+                        "Skipping page:",
+                        title
+                    )
+
+                    continue
 
 
 
@@ -186,7 +269,8 @@ def run_pipeline(db):
 
 
                 opportunity_type = classify_type(
-                    full_text
+                    full_text,
+                    source_name
                 )
 
 
@@ -198,7 +282,9 @@ def run_pipeline(db):
 
 
                 category = determine_category(
-                    opportunity_type
+                    opportunity_type,
+                    source_name,
+                    full_text
                 )
 
 
@@ -219,187 +305,249 @@ def run_pipeline(db):
 
 
 
-                sql = text("""
+                try:
 
-                INSERT INTO research_opportunities
 
-                (
+                    result = db.execute(
+                        text(
+                        """
 
-                opportunity_type,
+                        INSERT INTO research_opportunities
 
-                scope_type,
+                        (
 
-                category,
+                            opportunity_type,
 
+                            scope_type,
 
-                title,
+                            category,
 
-                organization,
 
-                summary,
+                            title,
 
+                            organization,
 
-                indexing_database,
+                            summary,
 
 
-                source_url,
+                            indexing_database,
 
-                canonical_url,
 
+                            source_url,
 
-                content_hash,
+                            canonical_url,
 
 
-                status,
+                            content_hash,
 
-                verification_status,
 
+                            status,
 
-                is_current,
+                            verification_status,
 
-                last_seen,
 
+                            is_current,
 
-                discovered_at,
 
-                updated_at
+                            last_seen,
 
-                )
 
+                            discovered_at,
 
-                VALUES
+                            updated_at
 
-                (
 
-                :type,
+                        )
 
-                :scope,
 
-                :category,
+                        VALUES
 
+                        (
 
-                :title,
+                            :opportunity_type,
 
-                :organization,
+                            :scope_type,
 
-                :summary,
+                            :category,
 
 
-                :indexing_database,
+                            :title,
 
+                            :organization,
 
-                :source_url,
+                            :summary,
 
-                :canonical_url,
 
+                            :indexing_database,
 
-                :hash,
 
+                            :source_url,
 
-                'OPEN',
+                            :canonical_url,
 
-                'UNVERIFIED',
 
+                            :content_hash,
 
-                1,
 
-                :last_seen,
+                            'OPEN',
 
+                            'UNVERIFIED',
 
-                :created,
 
-                :updated
+                            1,
 
-                )
 
+                            :last_seen,
 
-                ON DUPLICATE KEY UPDATE
 
+                            :discovered_at,
 
-                category = VALUES(category),
+                            :updated_at
 
-                title = VALUES(title),
+                        )
 
-                summary = VALUES(summary),
 
-                indexing_database =
-                    VALUES(indexing_database),
+                        ON DUPLICATE KEY UPDATE
 
-                last_seen =
-                    VALUES(last_seen),
 
-                updated_at =
-                    VALUES(updated_at)
+                            category =
+                            VALUES(category),
 
-                """)
 
+                            title =
+                            VALUES(title),
 
 
-                db.execute(
-                    sql,
-                    {
+                            summary =
+                            VALUES(summary),
 
-                    "type":
-                        opportunity_type,
 
+                            indexing_database =
+                            VALUES(indexing_database),
 
-                    "scope":
-                        opportunity_type,
 
+                            is_current = 1,
 
-                    "category":
-                        category,
 
+                            last_seen =
+                            VALUES(last_seen),
 
-                    "title":
-                        title,
 
+                            updated_at =
+                            VALUES(updated_at)
 
-                    "organization":
-                        source.get("name"),
+                        """
+                        ),
 
+                        {
 
-                    "summary":
-                        content[:3000],
 
+                        "opportunity_type":
+                            opportunity_type,
 
-                    "indexing_database":
-                        indexing_database,
 
+                        "scope_type":
+                            opportunity_type,
 
-                    "source_url":
-                        url,
 
+                        "category":
+                            category,
 
-                    "canonical_url":
-                        url,
 
+                        "title":
+                            title,
 
-                    "hash":
-                        content_hash,
 
+                        "organization":
+                            source_name,
 
-                    "last_seen":
-                        now,
 
+                        "summary":
+                            content[:3000],
 
-                    "created":
-                        now,
 
+                        "indexing_database":
+                            indexing_database,
 
-                    "updated":
-                        now
 
-                    }
+                        "source_url":
+                            url,
 
-                )
 
+                        "canonical_url":
+                            url,
 
-                inserted += 1
 
+                        "content_hash":
+                            content_hash,
 
 
-            db.commit()
+                        "last_seen":
+                            now,
+
+
+                        "discovered_at":
+                            now,
+
+
+                        "updated_at":
+                            now,
+
+
+                        }
+
+                    )
+
+
+                    if result.rowcount:
+
+                        updated += 1
+
+                    else:
+
+                        inserted += 1
+
+
+
+                    db.commit()
+
+
+
+                except Exception as e:
+
+
+                    db.rollback()
+
+
+                    print(
+                        "Database insert failed:",
+                        str(e)
+                    )
+
+
+
+        # Hide expired grants
+
+        db.execute(
+            text(
+            """
+
+            UPDATE research_opportunities
+
+            SET is_current = 0
+
+            WHERE category LIKE 'GRANT%'
+
+            AND deadline IS NOT NULL
+
+            AND deadline < CURDATE()
+
+            """
+            )
+        )
+
+
+        db.commit()
 
 
 
@@ -410,14 +558,18 @@ def run_pipeline(db):
 
         return {
 
+
             "status":
                 "SUCCESS",
+
 
             "discovered":
                 discovered,
 
+
             "inserted":
                 inserted,
+
 
             "updated":
                 updated
@@ -430,6 +582,12 @@ def run_pipeline(db):
 
 
         db.rollback()
+
+
+        print(
+            "PIPELINE FAILED:",
+            str(e)
+        )
 
 
         return {

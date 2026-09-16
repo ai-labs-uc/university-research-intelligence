@@ -8,46 +8,61 @@ from app.etl.utils import clean_text
 
 
 HEADERS = {
-
     "User-Agent":
-    (
-        "Mozilla/5.0 "
-        "(Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 "
-        "Chrome/120 Safari/537.36"
-    ),
-
-    "Accept":
-    "text/html,application/xhtml+xml"
-
+        "Mozilla/5.0 Research Intelligence Bot"
 }
 
 
 
-def get_page(url):
+IGNORE_LINK_TEXT = [
+
+    "home",
+    "news",
+    "events",
+    "calls and events",
+    "announcement",
+    "memorandum",
+    "issuance",
+    "contact",
+    "about",
+    "archive"
+
+]
+
+
+def is_valid_link(text):
+
+    text = text.lower()
+
+
+    for word in IGNORE_LINK_TEXT:
+
+        if word in text:
+
+            return False
+
+
+    return True
+
+
+
+
+def discover_links(source):
+
 
     response = requests.get(
-        url,
+        source["listing_url"],
         headers=HEADERS,
         timeout=30,
         verify=False
     )
 
+
     response.raise_for_status()
-
-    return response.text
-
-
-
-def discover_links(source: dict):
-
-    html = get_page(
-        source["listing_url"]
-    )
 
 
     soup = BeautifulSoup(
-        html,
+        response.text,
         "lxml"
     )
 
@@ -57,14 +72,7 @@ def discover_links(source: dict):
     ).netloc
 
 
-    keywords = source.get(
-        "keywords",
-        []
-    )
-
-
     links = set()
-
 
 
     for a in soup.find_all(
@@ -90,18 +98,13 @@ def discover_links(source: dict):
                 " ",
                 strip=True
             )
-        ).lower()
+        )
 
 
 
-        if keywords:
+        if not is_valid_link(text):
 
-            if not any(
-                k.lower() in text
-                for k in keywords
-            ):
-
-                continue
+            continue
 
 
 
@@ -116,13 +119,24 @@ def discover_links(source: dict):
 
 def fetch_page(url):
 
-    html = get_page(url)
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        timeout=30,
+        verify=False
+    )
+
+
+    response.raise_for_status()
+
 
 
     soup = BeautifulSoup(
-        html,
+        response.text,
         "lxml"
     )
+
 
 
     title_node = (
@@ -143,10 +157,14 @@ def fetch_page(url):
     )
 
 
-    text = soup.get_text(
-        "\n",
-        strip=True
+    content = clean_text(
+
+        soup.get_text(
+            "\n",
+            strip=True
+        )
+
     )
 
 
-    return title, text
+    return title, content
