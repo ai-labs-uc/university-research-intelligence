@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from fastapi import Depends, APIRouter
 
-from app.db import get_db
+from app.database import get_db
 
 
 router = APIRouter()
@@ -22,7 +22,6 @@ def opportunities(
     result = db.execute(
         text(
         """
-
         SELECT
 
             o.*,
@@ -52,8 +51,6 @@ def opportunities(
 
 
         LIMIT 500
-
-
         """
         )
     )
@@ -74,11 +71,9 @@ def grants(
     db: Session = Depends(get_db)
 ):
 
-
     result = db.execute(
         text(
         """
-
         SELECT
 
             o.*,
@@ -94,11 +89,10 @@ def grants(
 
         LEFT JOIN opportunity_sources s
 
-        ON s.id=o.source_id
+        ON s.id = o.source_id
 
 
         WHERE
-
 
             o.is_current = 1
 
@@ -111,8 +105,6 @@ def grants(
 
 
         LIMIT 500
-
-
         """
         )
     )
@@ -134,12 +126,10 @@ def call_for_papers(
     db: Session = Depends(get_db)
 ):
 
-
     if scope:
 
-
         category = (
-            "CALL_FOR_PAPER_" 
+            "CALL_FOR_PAPER_"
             + scope.upper()
         )
 
@@ -147,7 +137,6 @@ def call_for_papers(
         result = db.execute(
             text(
             """
-
             SELECT
 
                 o.*,
@@ -163,14 +152,12 @@ def call_for_papers(
 
             LEFT JOIN opportunity_sources s
 
-            ON s.id=o.source_id
+            ON s.id = o.source_id
 
 
             WHERE
 
-
                 o.is_current = 1
-
 
                 AND o.category = :category
 
@@ -181,8 +168,6 @@ def call_for_papers(
 
 
             LIMIT 500
-
-
             """
             ),
 
@@ -195,11 +180,9 @@ def call_for_papers(
 
     else:
 
-
         result = db.execute(
             text(
             """
-
             SELECT
 
                 o.*,
@@ -215,14 +198,12 @@ def call_for_papers(
 
             LEFT JOIN opportunity_sources s
 
-            ON s.id=o.source_id
+            ON s.id = o.source_id
 
 
             WHERE
 
-
                 o.is_current = 1
-
 
                 AND o.category LIKE
                 'CALL_FOR_PAPER%'
@@ -234,12 +215,9 @@ def call_for_papers(
 
 
             LIMIT 500
-
-
             """
             )
         )
-
 
 
     return result.mappings().all()
