@@ -17,22 +17,20 @@ from app.etl.classifier import classify_type
 
 
 
-def create_hash(value: str):
+def generate_hash(url):
 
     return hashlib.sha256(
-        value.encode("utf-8")
+        url.encode("utf-8")
     ).hexdigest()
 
 
 
 def run_pipeline(db):
 
-    started_at = datetime.utcnow()
+    started = datetime.utcnow()
 
-
-    discovered_count = 0
-    inserted_count = 0
-    updated_count = 0
+    discovered = 0
+    inserted = 0
 
 
     sources = (
@@ -52,13 +50,11 @@ def run_pipeline(db):
 
                 links = discover_links(source)
 
-
             except Exception as e:
 
                 print(
-                    "Source discovery error:",
-                    source.get("name"),
-                    str(e)
+                    "Source error:",
+                    e
                 )
 
                 continue
@@ -72,35 +68,34 @@ def run_pipeline(db):
 
                     title, content = fetch_page(url)
 
-
                 except Exception as e:
 
                     print(
                         "Fetch error:",
-                        url,
-                        str(e)
+                        e
                     )
 
                     continue
 
 
 
-                discovered_count += 1
+                discovered += 1
 
 
 
-                combined_text = (
+                text_content = (
                     title
-                    + " "
-                    + content
+                    +
+                    " "
+                    +
+                    content
                 )
 
 
 
                 opportunity_type = classify_type(
-                    combined_text
+                    text_content
                 )
-
 
 
                 if opportunity_type is None:
@@ -113,38 +108,57 @@ def run_pipeline(db):
 
 
 
-                indexing_database = ""
+                db.execute(
+                    text(
+                    """
 
-                lower_text = combined_text.lower()
+                    INSERT INTO research_opportunities
 
+                    (
+                        opportunity_type,
+                        scope_type,
+                        title,
+                        organization,
+                        summary,
+                        source_url,
+                        canonical_url,
+                        content_hash,
+                        status,
+                        verification_status,
+                        is_current,
+                        last_seen,
+                        discovered_at,
+                        updated_at
+                    )
 
+                    VALUES
 
-                if "scopus" in lower_text:
+                    (
+                        :type,
+                        :scope,
+                        :title,
+                        :org,
+                        :summary,
+                        :url,
+                        :canonical,
+                        :hash,
+                        'OPEN',
+                        'UNVERIFIED',
+                        1,
+                        :seen,
+                        :created,
+                        :updated
+                    )
 
-                    indexing_database = "SCOPUS"
+                    """
+                    ),
+                    {
 
-
-                elif (
-                    "web of science" in lower_text
-                    or "wos" in lower_text
-                    or "clarivate" in lower_text
-                ):
-
-                    indexing_database = "WEB_OF_SCIENCE"
-
-
-
-                content_hash = create_hash(url)
-
-
-
-                values = {
-
-                    "opportunity_type":
+                    "type":
                         opportunity_type,
 
 
-                    "scope_type":
+                    "scope":
                         opportunity_type,
 
 
@@ -152,7 +166,7 @@ def run_pipeline(db):
                         title,
 
 
-                    "organization":
+                    "org":
                         source.get("name"),
 
 
@@ -160,177 +174,34 @@ def run_pipeline(db):
                         content[:3000],
 
 
-                    "topics":
-                        "",
-
-
-                    "discipline":
-                        "",
-
-
-                    "indexing_database":
-                        indexing_database,
-
-
-                    "source_url":
+                    "url":
                         url,
 
 
-                    "canonical_url":
+                    "canonical":
                         url,
 
 
-                    "content_hash":
-                        content_hash,
+                    "hash":
+                        generate_hash(url),
 
 
-                    "status":
-                        "OPEN",
-
-
-                    "verification_status":
-                        "UNVERIFIED",
-
-
-                    "is_current":
-                        1,
-
-
-                    "last_seen":
+                    "seen":
                         now,
 
 
-                    "discovered_at":
+                    "created":
                         now,
 
 
-                    "updated_at":
+                    "updated":
                         now
 
-                }
-
-
-
-                query = text(
-                """
-
-                INSERT INTO research_opportunities
-
-                (
-
-                    opportunity_type,
-
-                    scope_type,
-
-                    title,
-
-                    organization,
-
-                    summary,
-
-                    topics,
-
-                    discipline,
-
-                    indexing_database,
-
-                    source_url,
-
-                    canonical_url,
-
-                    content_hash,
-
-                    status,
-
-                    verification_status,
-
-                    is_current,
-
-                    last_seen,
-
-                    discovered_at,
-
-                    updated_at
-
+                    }
                 )
 
 
-                VALUES
-
-                (
-
-                    :opportunity_type,
-
-                    :scope_type,
-
-                    :title,
-
-                    :organization,
-
-                    :summary,
-
-                    :topics,
-
-                    :discipline,
-
-                    :indexing_database,
-
-                    :source_url,
-
-                    :canonical_url,
-
-                    :content_hash,
-
-                    :status,
-
-                    :verification_status,
-
-                    :is_current,
-
-                    :last_seen,
-
-                    :discovered_at,
-
-                    :updated_at
-
-                )
-
-
-                ON DUPLICATE KEY UPDATE
-
-
-                    title = VALUES(title),
-
-                    summary = VALUES(summary),
-
-                    status = VALUES(status),
-
-                    is_current = 1,
-
-                    last_seen = VALUES(last_seen),
-
-                    updated_at = VALUES(updated_at)
-
-                """
-                )
-
-
-
-                result = db.execute(
-                    query,
-                    values
-                )
-
-
-
-                if result.rowcount:
-
-                    updated_count += 1
-
-                else:
-
-                    inserted_count += 1
-
+                inserted += 1
 
 
 
@@ -338,62 +209,18 @@ def run_pipeline(db):
 
 
 
-
-
-        # Hide expired grants only
-
-        db.execute(
-            text(
-            """
-
-            UPDATE research_opportunities
-
-            SET is_current = 0
-
-            WHERE opportunity_type = 'GRANT'
-
-            AND deadline IS NOT NULL
-
-            AND deadline < CURDATE()
-
-            """
-            )
-        )
-
-
-        db.commit()
-
-
-
         return {
-
 
             "status":
                 "SUCCESS",
 
-
-            "started_at":
-                started_at.isoformat(),
-
-
-            "finished_at":
-                datetime.utcnow().isoformat(),
-
-
             "discovered":
-                discovered_count,
-
+                discovered,
 
             "inserted":
-                inserted_count,
-
-
-            "updated":
-                updated_count
+                inserted
 
         }
-
-
 
 
 
