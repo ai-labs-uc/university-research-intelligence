@@ -147,6 +147,60 @@ INTERNATIONAL_CFP_SOURCES = [
 ]
 }
 
+{
+    "code": "DA",
+    "name": "Department of Agriculture Research Programs",
+    "listing_url":
+        "https://www.da.gov.ph/",
+    "keywords":
+        [
+            "grant",
+            "research",
+            "funding",
+            "call"
+        ],
+},
+
+
+{
+    "code": "DENR",
+    "name": "Department of Environment and Natural Resources Research",
+    "listing_url":
+        "https://www.denr.gov.ph/",
+    "keywords":
+        [
+            "research",
+            "grant",
+            "project"
+        ],
+},
+
+
+{
+    "code": "NIH",
+    "name": "National Institutes of Health Research Funding",
+    "listing_url":
+        "https://grants.nih.gov/",
+    "keywords":
+        [
+            "grant",
+            "funding opportunity"
+        ],
+},
+
+
+{
+    "code": "NSF",
+    "name": "National Science Foundation Funding",
+    "listing_url":
+        "https://www.nsf.gov/funding/",
+    "keywords":
+        [
+            "grant",
+            "proposal"
+        ],
+},
+
 ]
 
 def enabled_default_sources():
