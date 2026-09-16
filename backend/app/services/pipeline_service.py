@@ -274,6 +274,13 @@ def run_pipeline(db):
                     opportunity_type
                 )
 
+                print(
+    "CLASSIFICATION:",
+    title,
+    opportunity_type,
+    category
+)
+
 
 
                 now = datetime.utcnow()
