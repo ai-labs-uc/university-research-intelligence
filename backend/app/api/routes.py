@@ -2,6 +2,7 @@ import json
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -45,32 +46,44 @@ def dashboard(db: Session = Depends(get_db)):
     }
 
 @router.get("/opportunities")
-def opportunities(db: Session = Depends(get_db)):
-    rows = db.execute(text('''
-        SELECT
-            o.*,
-            s.name AS source_name
-        FROM research_opportunities o
-        LEFT JOIN opportunity_sources s
-          ON s.id=o.source_id
-        ORDER BY
-            CASE WHEN o.deadline IS NULL THEN 1 ELSE 0 END,
-            o.deadline ASC,
-            o.id DESC
-        LIMIT 500
-    ''')).mappings().all()
+def opportunities(
+    db: Session = Depends(get_db)
+):
 
-    result = []
-    for row in rows:
-        item = dict(row)
-        for field in ("topics", "indexing_flags"):
-            if isinstance(item.get(field), str):
-                try:
-                    item[field] = json.loads(item[field])
-                except Exception:
-                    pass
-        result.append(item)
-    return result
+    result = db.execute(text("""
+    
+    SELECT
+        o.*,
+        s.name AS source_name
+
+    FROM research_opportunities o
+
+    LEFT JOIN opportunity_sources s
+
+    ON s.id=o.source_id
+
+
+    WHERE
+
+    (
+        o.opportunity_type != 'GRANT'
+    )
+
+    OR
+
+    (
+        o.opportunity_type='GRANT'
+        AND o.deadline >= CURDATE()
+    )
+
+
+    ORDER BY o.id DESC
+
+    LIMIT 500
+
+    """))
+
+    return result.mappings().all()
 
 @router.get("/sources")
 def sources(db: Session = Depends(get_db)):
@@ -84,3 +97,73 @@ def sources(db: Session = Depends(get_db)):
 @router.post("/pipeline/run")
 def pipeline(db: Session = Depends(get_db)):
     return run_pipeline(db)
+
+
+@router.get("/grants")
+def grants(
+    db: Session = Depends(get_db)
+):
+
+    result=db.execute(text("""
+
+    SELECT *
+
+    FROM research_opportunities
+
+    WHERE opportunity_type='GRANT'
+
+    AND deadline >= CURDATE()
+
+    ORDER BY deadline ASC
+
+    """))
+
+    return result.mappings().all()
+
+
+@router.get("/call-for-papers")
+def call_for_papers(
+    scope:str=None,
+    db:Session=Depends(get_db)
+):
+
+
+    query="""
+
+    SELECT *
+
+    FROM research_opportunities
+
+    WHERE opportunity_type LIKE 'CALL_FOR_PAPER%'
+
+    """
+
+
+    params={}
+
+
+    if scope:
+
+        query += """
+        AND opportunity_type=:scope
+        """
+
+        params["scope"] = (
+            "CALL_FOR_PAPER_"+scope
+        )
+
+
+    query += """
+
+    ORDER BY deadline ASC
+
+    """
+
+
+    result=db.execute(
+        text(query),
+        params
+    )
+
+
+    return result.mappings().all()

@@ -112,6 +112,42 @@ SOURCES = [
     },
 ]
 
+INTERNATIONAL_CFP_SOURCES = [
+
+{
+"code":"IEEE",
+"name":"IEEE Conferences",
+"listing_url":
+"https://conferences.ieeeauthorcenter.ieee.org/",
+"keywords":[
+"call for papers",
+"conference"
+]
+},
+
+
+{
+"code":"SPRINGER",
+"name":"Springer Conferences",
+"listing_url":
+"https://www.springer.com/gp/computer-science/lncs/conferences",
+"keywords":[
+"call for papers"
+]
+},
+
+
+{
+"code":"WIKICFP",
+"name":"WikiCFP",
+"listing_url":
+"http://www.wikicfp.com/cfp/",
+"keywords":[
+"call for papers"
+]
+}
+
+]
 
 def enabled_default_sources():
     return SOURCES

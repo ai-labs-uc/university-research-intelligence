@@ -1,70 +1,171 @@
-import { useEffect, useMemo, useState } from "react"
-import api from "../api/client"
+import { useEffect, useMemo, useState } from "react";
+import api from "../api/client";
 
 const TABS = [
-  ["ALL", "All"],
-  ["CALL_FOR_PAPER", "Call for Papers"],
-  ["GRANT", "Grants"],
-]
+  {
+    value: "ALL",
+    label: "All",
+  },
+  {
+    value: "GRANT",
+    label: "Grants",
+  },
+  {
+    value: "CALL_FOR_PAPER_NATIONAL",
+    label: "National Call for Papers",
+  },
+  {
+    value: "CALL_FOR_PAPER_INTERNATIONAL",
+    label: "International Call for Papers",
+  },
+];
+
+function formatType(type) {
+  if (type === "GRANT") {
+    return "Grant";
+  }
+
+  if (type === "CALL_FOR_PAPER_NATIONAL") {
+    return "National Call for Papers";
+  }
+
+  if (type === "CALL_FOR_PAPER_INTERNATIONAL") {
+    return "International Call for Papers";
+  }
+
+  return type || "Opportunity";
+}
+
+function parseTextList(value) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    if (Array.isArray(value)) {
+      return value;
+    }
+
+    return value
+      .replace(/[\[\]"]/g, "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 export default function Opportunities() {
-  const [items, setItems] = useState([])
-  const [query, setQuery] = useState("")
-  const [tab, setTab] = useState("ALL")
+  const [items, setItems] = useState([]);
+
+  const [query, setQuery] = useState("");
+
+  const [tab, setTab] = useState("ALL");
+
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get("/api/opportunities").then(r => setItems(r.data))
-  }, [])
+    async function loadData() {
+      setLoading(true);
 
-  const counts = useMemo(() => {
-    const c = { CALL_FOR_PAPER: 0, GRANT: 0 }
-    for (const item of items) {
-      if (c[item.opportunity_type] !== undefined) c[item.opportunity_type]++
+      try {
+        let endpoint = "/api/opportunities";
+
+        if (tab === "GRANT") {
+          endpoint = "/api/grants";
+        }
+
+        if (tab === "CALL_FOR_PAPER_NATIONAL") {
+          endpoint = "/api/call-for-papers?scope=NATIONAL";
+        }
+
+        if (tab === "CALL_FOR_PAPER_INTERNATIONAL") {
+          endpoint = "/api/call-for-papers?scope=INTERNATIONAL";
+        }
+
+        const response = await api.get(endpoint);
+
+        setItems(response.data || []);
+      } catch (error) {
+        console.error("Unable to load opportunities", error);
+
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
     }
-    return c
-  }, [items])
+
+    loadData();
+  }, [tab]);
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase()
-    return items
-      .filter(item => tab === "ALL" || item.opportunity_type === tab)
-      .filter(item =>
-        `${item.title} ${item.opportunity_type} ${item.source_name ?? ""}`
-          .toLowerCase()
-          .includes(q)
-      )
-  }, [items, query, tab])
+    const q = query.toLowerCase();
+
+    return items.filter((item) => {
+      const searchable = `
+
+      ${item.title || ""}
+
+      ${item.organization || ""}
+
+      ${item.summary || ""}
+
+      ${item.source_name || ""}
+
+      ${item.discipline || ""}
+
+      ${item.indexing_database || ""}
+
+      `;
+
+      return searchable.toLowerCase().includes(q);
+    });
+  }, [items, query]);
+
+  const counts = useMemo(() => {
+    const result = {
+      GRANT: 0,
+
+      CALL_FOR_PAPER_NATIONAL: 0,
+
+      CALL_FOR_PAPER_INTERNATIONAL: 0,
+    };
+
+    items.forEach((item) => {
+      if (result[item.opportunity_type] !== undefined) {
+        result[item.opportunity_type]++;
+      }
+    });
+
+    return result;
+  }, [items]);
 
   return (
     <div>
-      <h1 className="text-3xl font-black">
-        Call for Papers &amp; Grants
-      </h1>
-      <p className="mt-2 max-w-2xl text-slate-600">
-        Every open call for papers and grant opportunity this system has
-        picked up, in one list.
+      <h1 className="text-3xl font-black">Research Opportunities</h1>
+
+      <p className="mt-2 max-w-3xl text-slate-600">
+        Current grants and updated national and international calls for papers.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {TABS.map(([value, label]) => (
+        {TABS.map((tabItem) => (
           <button
-            key={value}
-            onClick={() => setTab(value)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              tab === value
-                ? "bg-uc-800 text-white"
-                : "bg-white text-slate-700 border border-slate-300"
-            }`}
+            key={tabItem.value}
+            onClick={() => setTab(tabItem.value)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold
+
+              ${
+                tab === tabItem.value
+                  ? "bg-uc-800 text-white"
+                  : "bg-white border border-slate-300 text-slate-700"
+              }`}
           >
-            {label}
-            {value !== "ALL" && (
-              <span
-                className={
-                  tab === value ? "ml-2 text-uc-100" : "ml-2 text-slate-400"
-                }
-              >
-                {counts[value]}
-              </span>
+            {tabItem.label}
+
+            {tabItem.value !== "ALL" && (
+              <span className="ml-2">{counts[tabItem.value] || 0}</span>
             )}
           </button>
         ))}
@@ -72,65 +173,89 @@ export default function Opportunities() {
 
       <input
         value={query}
-        onChange={e => setQuery(e.target.value)}
-        placeholder="Search calls for papers and grants..."
-        className="mt-4 w-full max-w-2xl rounded-xl border border-slate-300 bg-white px-4 py-3"
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search opportunities..."
+        className="mt-5 w-full max-w-2xl rounded-xl border border-slate-300 bg-white px-4 py-3"
       />
 
-      <div className="mt-6 grid gap-4">
-        {filtered.length === 0 && (
-          <p className="text-slate-500">
-            No {tab === "ALL" ? "opportunities" : TABS.find(([v]) => v === tab)[1].toLowerCase()} match yet — try a different tab, clear the search, or run the pipeline.
-          </p>
-        )}
+      {loading && (
+        <p className="mt-6 text-slate-500">Loading opportunities...</p>
+      )}
 
-        {filtered.map(item => (
+      {!loading && filtered.length === 0 && (
+        <p className="mt-6 text-slate-500">No opportunities found.</p>
+      )}
+
+      <div className="mt-6 grid gap-5">
+        {filtered.map((item) => (
           <article
             key={item.id}
             className="rounded-2xl border border-slate-200 bg-white p-6"
           >
-            <div className="flex flex-wrap gap-2 text-xs font-bold uppercase tracking-wider">
+            <div className="flex flex-wrap gap-2 text-xs font-bold uppercase">
               <span className="text-uc-700">
-                {item.opportunity_type === "CALL_FOR_PAPER"
-                  ? "Call for Paper"
-                  : "Grant"}
+                {formatType(item.opportunity_type)}
               </span>
-              <span className="text-slate-500">
-                {item.source_name}
-              </span>
-              <span className="text-emerald-700">
-                {item.status}
-              </span>
-              {(item.indexing_flags || []).map(flag => (
+
+              {item.source_name && (
+                <span className="text-slate-500">{item.source_name}</span>
+              )}
+
+              {item.status && (
+                <span className="text-emerald-700">{item.status}</span>
+              )}
+            </div>
+
+            <h2 className="mt-3 text-xl font-bold">{item.title}</h2>
+
+            {item.organization && (
+              <p className="mt-2 font-medium text-slate-700">
+                {item.organization}
+              </p>
+            )}
+
+            {item.summary && (
+              <p className="mt-3 text-slate-600">{item.summary}</p>
+            )}
+
+            {item.deadline && (
+              <p className="mt-3 text-sm text-slate-500">
+                Deadline: {item.deadline}
+              </p>
+            )}
+
+            {item.discipline && (
+              <p className="mt-2 text-sm">Discipline: {item.discipline}</p>
+            )}
+
+            {item.indexing_database && (
+              <p className="mt-2 text-sm">Indexing: {item.indexing_database}</p>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {parseTextList(item.indexing_flags).map((flag) => (
                 <span
                   key={flag}
-                  className="rounded-full bg-purple-100 px-2 py-0.5 text-purple-800"
-                  title="Indexing as stated on the source page — not independently verified"
+                  className="rounded-full bg-purple-100 px-3 py-1 text-xs text-purple-800"
                 >
-                  {flag.replaceAll("_", " ")}
+                  {flag}
                 </span>
               ))}
             </div>
 
-            <h2 className="mt-2 text-xl font-bold">
-              {item.title}
-            </h2>
-
-            <p className="mt-3 text-slate-600">
-              {item.summary}
-            </p>
-
-            <a
-              href={item.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-4 inline-block text-sm font-semibold text-uc-700"
-            >
-              Open official source →
-            </a>
+            {item.source_url && (
+              <a
+                href={item.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-5 inline-block text-sm font-semibold text-uc-700"
+              >
+                Open official source →
+              </a>
+            )}
           </article>
         ))}
       </div>
     </div>
-  )
+  );
 }
