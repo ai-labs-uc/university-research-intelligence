@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 
 from sqlalchemy import text
 
@@ -14,7 +15,12 @@ from app.etl.sources import (
 
 from app.etl.classifier import classify_type
 
-from app.etl.utils import clean_text
+
+def make_hash(value: str):
+    return hashlib.sha256(
+        value.encode("utf-8")
+    ).hexdigest()
+
 
 
 def run_pipeline(db):
@@ -59,11 +65,10 @@ def run_pipeline(db):
 
                     title, content = fetch_page(url)
 
-
                 except Exception as e:
 
                     print(
-                        "Page fetch failed:",
+                        "Fetch failed:",
                         url,
                         e
                     )
@@ -75,13 +80,13 @@ def run_pipeline(db):
                 discovered_count += 1
 
 
-
-                combined_text = clean_text(
-                    f"""
-                    {title}
-                    {content}
-                    """
-                )
+                combined_text = (
+                    title
+                    +
+                    " "
+                    +
+                    content
+                ).lower()
 
 
 
@@ -90,9 +95,9 @@ def run_pipeline(db):
                 )
 
 
+                # Ignore irrelevant pages
 
                 if opportunity_type is None:
-
                     continue
 
 
@@ -101,21 +106,25 @@ def run_pipeline(db):
 
 
 
-                if "scopus" in combined_text.lower():
+                indexing_database = ""
+
+
+                if "scopus" in combined_text:
 
                     indexing_database = "SCOPUS"
 
-                elif "web of science" in combined_text.lower():
+
+                if (
+                    "web of science" in combined_text
+                    or "wos" in combined_text
+                    or "clarivate" in combined_text
+                ):
 
                     indexing_database = "WEB_OF_SCIENCE"
 
-                elif "wos" in combined_text.lower():
 
-                    indexing_database = "WEB_OF_SCIENCE"
 
-                else:
-
-                    indexing_database = ""
+                content_hash = make_hash(url)
 
 
 
@@ -123,12 +132,135 @@ def run_pipeline(db):
 
 
 
-                values = {
+                sql = text(
+                """
 
-                    "source_id": None,
+                INSERT INTO research_opportunities
+
+                (
+                    source_id,
+
+                    opportunity_type,
+
+                    scope_type,
+
+
+                    title,
+
+                    organization,
+
+                    summary,
+
+
+                    topics,
+
+                    discipline,
+
+                    indexing_database,
+
+
+                    source_url,
+
+                    canonical_url,
+
+
+                    content_hash,
+
+
+                    status,
+
+                    verification_status,
+
+
+                    is_current,
+
+                    last_seen,
+
+
+                    discovered_at,
+
+                    updated_at
+
+                )
+
+
+                VALUES
+
+                (
+
+                    NULL,
+
+                    :opportunity_type,
+
+                    :scope_type,
+
+
+                    :title,
+
+                    :organization,
+
+                    :summary,
+
+
+                    '',
+
+                    '',
+
+                    :indexing_database,
+
+
+                    :source_url,
+
+                    :canonical_url,
+
+
+                    :content_hash,
+
+
+                    'OPEN',
+
+                    'UNVERIFIED',
+
+
+                    1,
+
+                    :last_seen,
+
+
+                    :discovered_at,
+
+                    :updated_at
+
+                )
+
+
+                ON DUPLICATE KEY UPDATE
+
+
+                    title = VALUES(title),
+
+                    summary = VALUES(summary),
+
+                    status = 'OPEN',
+
+                    is_current = 1,
+
+                    last_seen = VALUES(last_seen),
+
+                    updated_at = VALUES(updated_at)
+
+                """
+                )
+
+
+
+                result = db.execute(
+                    sql,
+                    {
 
                     "opportunity_type":
                         opportunity_type,
+
 
                     "scope_type":
                         scope_type,
@@ -146,28 +278,8 @@ def run_pipeline(db):
                         content[:3000],
 
 
-                    "eligibility":
-                        "",
-
-
-                    "topics":
-                        "",
-
-
-                    "discipline":
-                        "",
-
-
                     "indexing_database":
                         indexing_database,
-
-
-                    "country":
-                        "",
-
-
-                    "deadline":
-                        None,
 
 
                     "source_url":
@@ -179,19 +291,7 @@ def run_pipeline(db):
 
 
                     "content_hash":
-                        None,
-
-
-                    "status":
-                        "OPEN",
-
-
-                    "verification_status":
-                        "UNVERIFIED",
-
-
-                    "is_current":
-                        1,
+                        content_hash,
 
 
                     "last_seen":
@@ -205,95 +305,17 @@ def run_pipeline(db):
                     "updated_at":
                         now
 
-                }
-
-
-
-                db.execute(
-                    text(
-                    """
-
-                    INSERT INTO research_opportunities
-
-                    (
-
-                    source_id,
-                    opportunity_type,
-                    scope_type,
-
-                    title,
-                    organization,
-
-                    summary,
-                    eligibility,
-
-                    topics,
-                    discipline,
-                    indexing_database,
-
-                    country,
-                    deadline,
-
-                    source_url,
-                    canonical_url,
-
-                    content_hash,
-
-                    status,
-                    verification_status,
-
-                    is_current,
-                    last_seen,
-
-                    discovered_at,
-                    updated_at
-
-                    )
-
-                    VALUES
-
-                    (
-
-                    :source_id,
-                    :opportunity_type,
-                    :scope_type,
-
-                    :title,
-                    :organization,
-
-                    :summary,
-                    :eligibility,
-
-                    :topics,
-                    :discipline,
-                    :indexing_database,
-
-                    :country,
-                    :deadline,
-
-                    :source_url,
-                    :canonical_url,
-
-                    :content_hash,
-
-                    :status,
-                    :verification_status,
-
-                    :is_current,
-                    :last_seen,
-
-                    :discovered_at,
-                    :updated_at
-
-                    )
-
-                    """
-                    ),
-                    values
+                    }
                 )
 
 
-                inserted_count += 1
+                if result.rowcount == 1:
+
+                    inserted_count += 1
+
+                else:
+
+                    updated_count += 1
 
 
 
@@ -311,7 +333,7 @@ def run_pipeline(db):
 
             SET is_current = 0
 
-            WHERE opportunity_type='GRANT'
+            WHERE opportunity_type = 'GRANT'
 
             AND deadline IS NOT NULL
 
@@ -344,6 +366,7 @@ def run_pipeline(db):
 
             "updated":
                 updated_count
+
         }
 
 
