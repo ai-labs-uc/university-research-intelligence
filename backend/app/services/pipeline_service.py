@@ -17,61 +17,42 @@ from app.etl.classifier import classify_type
 
 
 
-BAD_PAGE_TITLES = [
+BAD_TITLES = [
+
     "calls and events",
+
     "news",
+
     "announcement",
+
     "announcements",
+
     "memorandum",
+
     "issuance",
+
     "home",
+
     "contact",
+
     "about us",
-    "archive",
+
 ]
 
 
-def generate_hash(value: str):
+
+def make_hash(url):
 
     return hashlib.sha256(
-        value.encode("utf-8")
+        url.encode()
     ).hexdigest()
 
 
 
-def determine_category(
-    opportunity_type,
-    source_name,
-    content
-):
-
-    text = (
-        f"{source_name} {content}"
-        .lower()
-    )
+def get_category(opportunity_type):
 
 
     if opportunity_type == "GRANT":
-
-        international_grants = [
-
-            "nih",
-            "nsf",
-            "horizon europe",
-            "world bank",
-            "unesco",
-            "european union",
-
-        ]
-
-
-        for item in international_grants:
-
-            if item in text:
-
-                return "GRANT_INTERNATIONAL"
-
-
 
         return "GRANT_PHILIPPINES"
 
@@ -93,63 +74,52 @@ def determine_category(
 
 
 
-def is_bad_page(title):
-
-    if not title:
-
-        return True
 
 
-    title = title.lower().strip()
+def has_opportunity_content(content):
 
 
-    for item in BAD_PAGE_TITLES:
-
-        if title == item:
-
-            return True
+    content = content.lower()
 
 
-    return False
+    keywords = [
+
+        "deadline",
+
+        "submission",
+
+        "proposal",
+
+        "application",
+
+        "funding",
+
+        "grant",
+
+        "research",
+
+        "paper",
+
+        "abstract",
+
+        "manuscript",
+
+        "conference"
+
+    ]
 
 
-
-def detect_indexing(content):
-
-    text = content.lower()
-
-    indexes = []
+    return any(
+        word in content
+        for word in keywords
+    )
 
 
-    if "scopus" in text:
-
-        indexes.append("SCOPUS")
-
-
-    if (
-        "web of science" in text
-        or "wos" in text
-        or "clarivate" in text
-    ):
-
-        indexes.append("WEB_OF_SCIENCE")
-
-
-    if "ieee" in text:
-
-        indexes.append("IEEE")
-
-
-    if "acm" in text:
-
-        indexes.append("ACM")
-
-
-    return ",".join(indexes)
 
 
 
 def run_pipeline(db):
+
 
     print(
         "=== PIPELINE START ==="
@@ -157,21 +127,29 @@ def run_pipeline(db):
 
 
     discovered = 0
+
     inserted = 0
+
     updated = 0
 
 
+
     sources = (
+
         enabled_default_sources()
+
         +
+
         INTERNATIONAL_CFP_SOURCES
+
     )
 
 
     print(
-        "Sources loaded:",
+        "TOTAL SOURCES:",
         len(sources)
     )
+
 
 
     try:
@@ -187,9 +165,10 @@ def run_pipeline(db):
 
 
             print(
-                "Processing source:",
+                "SOURCE:",
                 source_name
             )
+
 
 
             try:
@@ -199,26 +178,23 @@ def run_pipeline(db):
                 )
 
 
-                print(
-                    "Links found:",
-                    len(links)
-                )
-
-
             except Exception as e:
 
-
                 print(
-                    "Source failed:",
-                    source_name,
-                    str(e)
+                    "SOURCE FAILED:",
+                    e
                 )
 
                 continue
 
 
 
-            # Limit per source for Render stability
+            print(
+                "LINK COUNT:",
+                len(links)
+            )
+
+
 
             for url in links[:20]:
 
@@ -232,11 +208,40 @@ def run_pipeline(db):
 
                 except Exception as e:
 
+                    print(
+                        "FETCH FAILED:",
+                        url,
+                        e
+                    )
+
+                    continue
+
+
+
+                if not title:
+
+                    continue
+
+
+
+                if title.lower() in BAD_TITLES:
 
                     print(
-                        "Fetch failed:",
-                        url,
-                        str(e)
+                        "SKIP PAGE:",
+                        title
+                    )
+
+                    continue
+
+
+
+                if not has_opportunity_content(
+                    content
+                ):
+
+                    print(
+                        "SKIP NON OPPORTUNITY:",
+                        title
                     )
 
                     continue
@@ -247,30 +252,14 @@ def run_pipeline(db):
 
 
 
-                if is_bad_page(title):
-
-                    print(
-                        "Skipping page:",
-                        title
-                    )
-
-                    continue
-
-
-
-                full_text = (
-                    title
-                    +
-                    " "
-                    +
-                    content
-                )
-
-
-
                 opportunity_type = classify_type(
-                    full_text,
+
+                    title,
+
+                    content,
+
                     source_name
+
                 )
 
 
@@ -281,16 +270,8 @@ def run_pipeline(db):
 
 
 
-                category = determine_category(
-                    opportunity_type,
-                    source_name,
-                    full_text
-                )
-
-
-
-                indexing_database = detect_indexing(
-                    full_text
+                category = get_category(
+                    opportunity_type
                 )
 
 
@@ -299,255 +280,169 @@ def run_pipeline(db):
 
 
 
-                content_hash = generate_hash(
-                    url
+                db.execute(
+
+                    text(
+
+                    """
+
+                    INSERT INTO research_opportunities
+
+                    (
+
+                    opportunity_type,
+
+                    scope_type,
+
+                    category,
+
+                    title,
+
+                    organization,
+
+                    summary,
+
+                    source_url,
+
+                    canonical_url,
+
+                    content_hash,
+
+                    status,
+
+                    verification_status,
+
+                    is_current,
+
+                    last_seen,
+
+                    discovered_at,
+
+                    updated_at
+
+                    )
+
+
+                    VALUES
+
+                    (
+
+                    :type,
+
+                    :scope,
+
+                    :category,
+
+                    :title,
+
+                    :organization,
+
+                    :summary,
+
+                    :url,
+
+                    :canonical,
+
+                    :hash,
+
+                    'OPEN',
+
+                    'UNVERIFIED',
+
+                    1,
+
+                    :seen,
+
+                    :created,
+
+                    :updated
+
+                    )
+
+
+                    ON DUPLICATE KEY UPDATE
+
+
+                    category =
+                    VALUES(category),
+
+
+                    summary =
+                    VALUES(summary),
+
+
+                    last_seen =
+                    VALUES(last_seen),
+
+
+                    updated_at =
+                    VALUES(updated_at)
+
+                    """
+
+                    ),
+
+                    {
+
+
+                    "type":
+                    opportunity_type,
+
+
+                    "scope":
+                    opportunity_type,
+
+
+                    "category":
+                    category,
+
+
+                    "title":
+                    title,
+
+
+                    "organization":
+                    source_name,
+
+
+                    "summary":
+                    content[:3000],
+
+
+                    "url":
+                    url,
+
+
+                    "canonical":
+                    url,
+
+
+                    "hash":
+                    make_hash(url),
+
+
+                    "seen":
+                    now,
+
+
+                    "created":
+                    now,
+
+
+                    "updated":
+                    now
+
+                    }
+
                 )
 
 
 
-                try:
+                inserted += 1
 
 
-                    result = db.execute(
-                        text(
-                        """
 
-                        INSERT INTO research_opportunities
-
-                        (
-
-                            opportunity_type,
-
-                            scope_type,
-
-                            category,
-
-
-                            title,
-
-                            organization,
-
-                            summary,
-
-
-                            indexing_database,
-
-
-                            source_url,
-
-                            canonical_url,
-
-
-                            content_hash,
-
-
-                            status,
-
-                            verification_status,
-
-
-                            is_current,
-
-
-                            last_seen,
-
-
-                            discovered_at,
-
-                            updated_at
-
-
-                        )
-
-
-                        VALUES
-
-                        (
-
-                            :opportunity_type,
-
-                            :scope_type,
-
-                            :category,
-
-
-                            :title,
-
-                            :organization,
-
-                            :summary,
-
-
-                            :indexing_database,
-
-
-                            :source_url,
-
-                            :canonical_url,
-
-
-                            :content_hash,
-
-
-                            'OPEN',
-
-                            'UNVERIFIED',
-
-
-                            1,
-
-
-                            :last_seen,
-
-
-                            :discovered_at,
-
-                            :updated_at
-
-                        )
-
-
-                        ON DUPLICATE KEY UPDATE
-
-
-                            category =
-                            VALUES(category),
-
-
-                            title =
-                            VALUES(title),
-
-
-                            summary =
-                            VALUES(summary),
-
-
-                            indexing_database =
-                            VALUES(indexing_database),
-
-
-                            is_current = 1,
-
-
-                            last_seen =
-                            VALUES(last_seen),
-
-
-                            updated_at =
-                            VALUES(updated_at)
-
-                        """
-                        ),
-
-                        {
-
-
-                        "opportunity_type":
-                            opportunity_type,
-
-
-                        "scope_type":
-                            opportunity_type,
-
-
-                        "category":
-                            category,
-
-
-                        "title":
-                            title,
-
-
-                        "organization":
-                            source_name,
-
-
-                        "summary":
-                            content[:3000],
-
-
-                        "indexing_database":
-                            indexing_database,
-
-
-                        "source_url":
-                            url,
-
-
-                        "canonical_url":
-                            url,
-
-
-                        "content_hash":
-                            content_hash,
-
-
-                        "last_seen":
-                            now,
-
-
-                        "discovered_at":
-                            now,
-
-
-                        "updated_at":
-                            now,
-
-
-                        }
-
-                    )
-
-
-                    if result.rowcount:
-
-                        updated += 1
-
-                    else:
-
-                        inserted += 1
-
-
-
-                    db.commit()
-
-
-
-                except Exception as e:
-
-
-                    db.rollback()
-
-
-                    print(
-                        "Database insert failed:",
-                        str(e)
-                    )
-
-
-
-        # Hide expired grants
-
-        db.execute(
-            text(
-            """
-
-            UPDATE research_opportunities
-
-            SET is_current = 0
-
-            WHERE category LIKE 'GRANT%'
-
-            AND deadline IS NOT NULL
-
-            AND deadline < CURDATE()
-
-            """
-            )
-        )
-
-
-        db.commit()
+            db.commit()
 
 
 
@@ -556,23 +451,24 @@ def run_pipeline(db):
         )
 
 
+
         return {
 
 
             "status":
-                "SUCCESS",
+            "SUCCESS",
 
 
             "discovered":
-                discovered,
+            discovered,
 
 
             "inserted":
-                inserted,
+            inserted,
 
 
             "updated":
-                updated
+            updated
 
         }
 
@@ -585,7 +481,7 @@ def run_pipeline(db):
 
 
         print(
-            "PIPELINE FAILED:",
+            "PIPELINE ERROR:",
             str(e)
         )
 
@@ -593,9 +489,9 @@ def run_pipeline(db):
         return {
 
             "status":
-                "FAILED",
+            "FAILED",
 
             "error":
-                str(e)
+            str(e)
 
         }

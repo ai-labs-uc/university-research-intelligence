@@ -8,36 +8,73 @@ from app.etl.utils import clean_text
 
 
 HEADERS = {
+
     "User-Agent":
-        "Mozilla/5.0 Research Intelligence Bot"
+        (
+            "Mozilla/5.0 "
+            "(Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 "
+            "Chrome/120 Safari/537.36"
+        )
+
 }
 
 
 
-IGNORE_LINK_TEXT = [
+# Pages that are not opportunities
 
-    "home",
-    "news",
-    "events",
-    "calls and events",
-    "announcement",
-    "memorandum",
-    "issuance",
-    "contact",
-    "about",
-    "archive"
+BLOCKED_PATHS = [
+
+    "/about",
+    "/contact",
+    "/privacy",
+    "/terms",
+    "/category",
+    "/tag",
+    "/author",
+    "/page",
 
 ]
 
 
-def is_valid_link(text):
 
-    text = text.lower()
+BLOCKED_TITLES = [
+
+    "home",
+
+    "news",
+
+    "latest news",
+
+    "calls and events",
+
+    "events",
+
+    "announcement",
+
+    "announcements",
+
+    "memorandum",
+
+    "issuances",
+
+    "contact",
+
+    "about us",
+
+]
 
 
-    for word in IGNORE_LINK_TEXT:
 
-        if word in text:
+def valid_url(url):
+
+
+    lower = url.lower()
+
+
+    for path in BLOCKED_PATHS:
+
+        if path in lower:
 
             return False
 
@@ -47,22 +84,41 @@ def is_valid_link(text):
 
 
 
-def discover_links(source):
+def get_page(url):
 
 
     response = requests.get(
-        source["listing_url"],
+
+        url,
+
         headers=HEADERS,
+
         timeout=30,
+
         verify=False
+
     )
 
 
     response.raise_for_status()
 
 
+    return response.text
+
+
+
+
+
+def discover_links(source: dict):
+
+
+    html = get_page(
+        source["listing_url"]
+    )
+
+
     soup = BeautifulSoup(
-        response.text,
+        html,
         "lxml"
     )
 
@@ -72,7 +128,16 @@ def discover_links(source):
     ).netloc
 
 
+
+    keywords = source.get(
+        "keywords",
+        []
+    )
+
+
+
     links = set()
+
 
 
     for a in soup.find_all(
@@ -82,9 +147,13 @@ def discover_links(source):
 
 
         url = urljoin(
+
             source["listing_url"],
+
             a["href"]
+
         )
+
 
 
         if urlsplit(url).netloc != host:
@@ -93,18 +162,39 @@ def discover_links(source):
 
 
 
+        if not valid_url(url):
+
+            continue
+
+
+
         text = clean_text(
+
             a.get_text(
                 " ",
                 strip=True
             )
-        )
+
+        ).lower()
 
 
 
-        if not is_valid_link(text):
+        # If source has keywords,
+        # require matching link text
 
-            continue
+        if keywords:
+
+
+            if not any(
+
+                keyword.lower()
+                in text
+
+                for keyword in keywords
+
+            ):
+
+                continue
 
 
 
@@ -117,54 +207,67 @@ def discover_links(source):
 
 
 
+
+
 def fetch_page(url):
 
 
-    response = requests.get(
-        url,
-        headers=HEADERS,
-        timeout=30,
-        verify=False
-    )
-
-
-    response.raise_for_status()
+    html = get_page(url)
 
 
 
     soup = BeautifulSoup(
-        response.text,
+
+        html,
+
         "lxml"
+
     )
 
 
 
     title_node = (
+
         soup.find("h1")
-        or soup.find("title")
+
+        or
+
+        soup.find("title")
+
     )
+
 
 
     title = clean_text(
 
         title_node.get_text(
+
             " ",
+
             strip=True
+
         )
+
         if title_node
-        else url
+
+        else ""
 
     )
+
 
 
     content = clean_text(
 
         soup.get_text(
+
             "\n",
+
             strip=True
+
         )
 
     )
+
 
 
     return title, content

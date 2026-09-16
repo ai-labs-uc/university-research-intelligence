@@ -1,73 +1,113 @@
 import re
 
 
-GRANT_KEYWORDS = [
+GRANT_SOURCE_KEYWORDS = [
 
-    "research grant",
-    "grant opportunity",
-    "funding opportunity",
-    "funding program",
-    "project funding",
-    "call for proposal",
-    "request for proposal",
-    "rfp",
-    "grants-in-aid",
-
-    "dost grant",
+    "dost",
     "pcieerd",
     "pchrd",
     "pcaarrd",
+    "tapi",
 
     "department of agriculture",
-    "da research",
+    "da",
 
+    "ched",
     "commission on higher education",
-    "ched research",
 
-    "denr research",
+    "denr",
 
+    "nih",
     "national science foundation",
-    "nih grant",
+    "nsf",
+
     "horizon europe",
-    "world bank grant"
+    "world bank",
+    "unesco"
 
 ]
+
+
+GRANT_KEYWORDS = [
+
+    "research grant",
+
+    "grant program",
+
+    "grant opportunity",
+
+    "funding opportunity",
+
+    "research funding",
+
+    "funding support",
+
+    "funded project",
+
+    "call for proposal",
+
+    "call for proposals",
+
+    "request for proposal",
+
+    "rfp",
+
+    "grants-in-aid",
+
+    "project proposal",
+
+    "research project funding"
+
+]
+
 
 
 INTERNATIONAL_CFP_KEYWORDS = [
 
     "scopus",
+
     "web of science",
+
     "wos",
+
     "clarivate",
 
     "ieee",
+
     "ieee xplore",
+
     "acm",
 
     "springer",
+
     "elsevier",
+
     "wiley",
+
     "taylor and francis",
+
     "mdpi",
 
     "international conference",
+
     "international symposium",
 
     "call for papers",
-    "cfp",
 
     "paper submission",
-    "submit paper",
-    "full paper",
-    "abstract submission"
+
+    "abstract submission",
+
+    "submit manuscript",
 
 ]
+
 
 
 NATIONAL_CFP_KEYWORDS = [
 
     "philippine conference",
+
     "philippines conference",
 
     "national conference",
@@ -76,9 +116,13 @@ NATIONAL_CFP_KEYWORDS = [
 
     "research conference",
 
-    "paper submission",
+    "philippine journal",
+
+    "local journal",
 
     "call for papers",
+
+    "paper submission",
 
     "abstract submission"
 
@@ -86,14 +130,23 @@ NATIONAL_CFP_KEYWORDS = [
 
 
 
-IGNORE_KEYWORDS = [
+INVALID_PAGE_KEYWORDS = [
+
+    "calls and events",
+
+    "news",
+
+    "announcement",
 
     "memorandum",
+
     "issuance",
-    "administrative order",
-    "announcement only",
-    "scholarship",
-    "job opening"
+
+    "contact",
+
+    "about us",
+
+    "homepage",
 
 ]
 
@@ -102,6 +155,7 @@ IGNORE_KEYWORDS = [
 def normalize(text):
 
     if not text:
+
         return ""
 
     return re.sub(
@@ -112,47 +166,85 @@ def normalize(text):
 
 
 
-def classify_type(text, source_name):
+def classify_type(
+    title,
+    content,
+    source_name=""
+):
 
-    text = normalize(text)
+    combined = normalize(
+        f"""
+        {title}
+        {content}
+        {source_name}
+        """
+    )
+
+
+    source = normalize(
+        source_name
+    )
+
+
+    # ----------------------------
+    # Ignore category pages
+    # ----------------------------
+
+    if title:
+
+        title_clean = normalize(title)
+
+        for bad in INVALID_PAGE_KEYWORDS:
+
+            if title_clean == bad:
+
+                return None
 
 
 
-    # Ignore administrative pages
-
-    for word in IGNORE_KEYWORDS:
-
-        if word in text:
-
-            return None
-
-
-
+    # ----------------------------
     # Grants first
+    # ----------------------------
 
-    for word in GRANT_KEYWORDS:
+    for word in GRANT_SOURCE_KEYWORDS:
 
-        if word in text:
+        if word in source:
+
+            for grant_word in GRANT_KEYWORDS:
+
+                if grant_word in combined:
+
+                    return "GRANT"
+
+
+
+    for grant_word in GRANT_KEYWORDS:
+
+        if grant_word in combined:
 
             return "GRANT"
 
 
 
-    # International indexed CFP
+    # ----------------------------
+    # International CFP
+    # ----------------------------
 
     for word in INTERNATIONAL_CFP_KEYWORDS:
 
-        if word in text:
+        if word in combined:
 
             return "CALL_FOR_PAPER_INTERNATIONAL"
 
 
 
+    # ----------------------------
     # National CFP
+    # ----------------------------
 
     for word in NATIONAL_CFP_KEYWORDS:
 
-        if word in text:
+        if word in combined:
 
             return "CALL_FOR_PAPER_NATIONAL"
 
