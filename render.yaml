@@ -1,5 +1,8 @@
 services:
 
+  # ----------------------------------------------------------------
+  # API
+  # ----------------------------------------------------------------
   - type: web
     name: university-research-api
     runtime: python
@@ -8,6 +11,12 @@ services:
     buildCommand: pip install -r requirements.txt
 
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    # Render pings this to decide the instance is up. It also gives any
+    # external keep-warm pinger a cheap target: on the free plan the
+    # instance sleeps when idle and the next request pays a 50s+ cold
+    # start, which users experience as a broken login.
+    healthCheckPath: /health
 
     envVars:
       - key: DATABASE_URL
@@ -19,12 +28,24 @@ services:
       - key: CORS_ORIGINS
         sync: false
 
+      # Required for the "Sign in with Google" button to work. While this
+      # is unset, /api/auth/google returns 501 and the frontend shows
+      # "Google sign-in isn't configured on this deployment yet."
+      # This is the OAuth *client ID* only — no client secret is used by
+      # the Google Identity Services flow. See docs/AUTH.md.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
 
+
+  # ----------------------------------------------------------------
+  # Nightly harvest + deadline notifications
+  # ----------------------------------------------------------------
   - type: cron
     name: university-research-etl
     runtime: python
     rootDir: backend
 
+    # 19:00 UTC = 03:00 Asia/Manila. Off-peak for Philippine agency sites.
     schedule: "0 19 * * *"
 
     buildCommand: pip install -r requirements.txt
@@ -36,4 +57,22 @@ services:
         sync: false
 
       - key: SECRET_KEY
+        sync: false
+
+      # Link used in notification emails.
+      - key: FRONTEND_URL
+        value: https://university-research-intelligence-fr.vercel.app
+
+      # Email delivery. With SMTP_HOST unset the job still creates in-app
+      # alerts and logs what it would have emailed, so it is safe to
+      # deploy before mail credentials exist.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
         sync: false

@@ -1,8 +1,14 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useAuth } from "../auth/AuthContext"
+import { errorMessage, warmBackend } from "../api/client"
 import GoogleButton from "../auth/GoogleButton"
 import Logo from "../components/Logo"
+
+// How long a sign-in can run before we tell the user the server is
+// waking rather than leaving them staring at a spinner. The API is on a
+// free instance that sleeps when idle; a cold start was measured at 36.7s.
+const WAKE_HINT_AFTER_MS = 4000
 
 export default function Login() {
   const { login, loginWithGoogle } = useAuth()
@@ -14,32 +20,50 @@ export default function Login() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [waking, setWaking] = useState(false)
+  const wakeTimer = useRef(null)
+
+  // Wake the backend as soon as the page loads, so it is usually already
+  // up by the time the user finishes typing their password.
+  useEffect(() => {
+    warmBackend()
+    return () => clearTimeout(wakeTimer.current)
+  }, [])
+
+  function startSubmit() {
+    setError("")
+    setSubmitting(true)
+    wakeTimer.current = setTimeout(() => setWaking(true), WAKE_HINT_AFTER_MS)
+  }
+
+  function endSubmit() {
+    clearTimeout(wakeTimer.current)
+    setWaking(false)
+    setSubmitting(false)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setError("")
-    setSubmitting(true)
+    startSubmit()
     try {
       await login(email, password)
       navigate(redirectTo, { replace: true })
     } catch (err) {
-      setError(
-        err.response?.data?.detail || "Couldn't sign in. Please try again."
-      )
+      setError(errorMessage(err, "Couldn't sign in. Please try again."))
     } finally {
-      setSubmitting(false)
+      endSubmit()
     }
   }
 
   async function handleGoogleCredential(credential) {
-    setError("")
+    startSubmit()
     try {
       await loginWithGoogle(credential)
       navigate(redirectTo, { replace: true })
     } catch (err) {
-      setError(
-        err.response?.data?.detail || "Google sign-in failed. Please try again."
-      )
+      setError(errorMessage(err, "Google sign-in failed. Please try again."))
+    } finally {
+      endSubmit()
     }
   }
 
@@ -82,6 +106,13 @@ export default function Login() {
 
           {error && (
             <p className="text-sm text-red-600">{error}</p>
+          )}
+
+          {waking && !error && (
+            <p className="text-sm text-slate-500">
+              Waking up the server — this can take up to a minute on the
+              first sign-in of the day.
+            </p>
           )}
 
           <button

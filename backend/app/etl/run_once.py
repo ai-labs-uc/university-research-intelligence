@@ -1,37 +1,71 @@
 """
-Standalone ETL entry point.
+Standalone ETL entry point, run by the Render cron service (see
+render.yaml) or any OS scheduler.
 
-This replaces n8n's job of triggering the pipeline on a schedule. It
-opens its own database session and runs one full collect -> classify ->
-match cycle, then exits. Point your OS scheduler at this instead of
-running a separate orchestrator service:
+One full cycle: collect -> classify -> extract deadlines -> persist, then
+scan for approaching deadlines and send notifications.
 
-Linux/macOS (crontab -e), every day at 6 AM:
-    0 6 * * * cd /path/to/backend && /path/to/.venv/bin/python -m app.etl.run_once >> /var/log/research_etl.log 2>&1
-
-Windows (Task Scheduler), daily action:
-    Program:  C:\\path\\to\\backend\\.venv\\Scripts\\python.exe
-    Args:     -m app.etl.run_once
-    Start in: C:\\path\\to\\backend
-
-You can also just call it by hand any time:
+Run the whole thing:
     python -m app.etl.run_once
+
+Or one half at a time:
+    python -m app.etl.run_once --harvest-only
+    python -m app.etl.run_once --notify-only
 """
 
+from __future__ import annotations
+
+import argparse
+import json
+import logging
 import sys
 
 from app.core.database import SessionLocal
+from app.services.notification_service import run_deadline_notifications
 from app.services.pipeline_service import run_pipeline
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger("etl")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Research Intelligence ETL")
+    parser.add_argument("--harvest-only", action="store_true")
+    parser.add_argument("--notify-only", action="store_true")
+    args = parser.parse_args()
+
     db = SessionLocal()
+    exit_code = 0
+
     try:
-        result = run_pipeline(db)
-        print(result)
-        return 0
-    except Exception as exc:
-        print(f"Pipeline run failed: {exc}", file=sys.stderr)
+        if not args.notify_only:
+            report = run_pipeline(db)
+            log.info("Harvest: %s", json.dumps(report, default=str))
+
+            if report["status"] == "FAILED":
+                exit_code = 1
+            # A run that stores items but finds no deadlines is the exact
+            # silent failure that disabled notifications before. Surface it
+            # as a non-zero exit so the scheduler reports it.
+            elif report["inserted"] and not report["with_deadline"]:
+                log.error(
+                    "Harvest stored %s items but found 0 deadlines — "
+                    "deadline extraction is likely broken.",
+                    report["inserted"],
+                )
+                exit_code = 1
+
+        if not args.harvest_only:
+            result = run_deadline_notifications(db)
+            log.info("Notifications: %s", json.dumps(result, default=str))
+
+        return exit_code
+
+    except Exception as exc:                           # noqa: BLE001
+        log.exception("ETL run failed: %s", exc)
         return 1
     finally:
         db.close()

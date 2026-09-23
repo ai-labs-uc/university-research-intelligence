@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import api from "../api/client";
+import api, { errorMessage } from "../api/client";
 
 const TABS = [
   ["ALL", "All"],
@@ -20,10 +20,35 @@ export default function Opportunities() {
 
   const [tab, setTab] = useState("ALL");
 
+  const [loading, setLoading] = useState(true);
+
+  const [error, setError] = useState("");
+
+  // This request previously had no .catch(). Any failure — an expired
+  // token, or the backend waking from sleep — became an unhandled
+  // promise rejection and the page just sat there empty with no
+  // explanation. A 401 is left to the axios interceptor, which signs the
+  // user out and lets ProtectedRoute send them to /login.
   useEffect(() => {
-    api.get("/api/opportunities").then((res) => {
-      setItems(res.data || []);
-    });
+    let cancelled = false;
+
+    api
+      .get("/api/opportunities")
+      .then((res) => {
+        if (cancelled) return;
+        setItems(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch((err) => {
+        if (cancelled || err?.response?.status === 401) return;
+        setError(errorMessage(err, "Couldn't load opportunities."));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function category(item) {
@@ -108,6 +133,28 @@ export default function Opportunities() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+
+      {loading && (
+        <p className="mt-6 text-slate-500">Loading opportunities…</p>
+      )}
+
+      {error && !loading && (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-700">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-3 rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && filtered.length === 0 && (
+        <p className="mt-6 text-slate-500">
+          No opportunities match this filter yet.
+        </p>
+      )}
 
       <div className="mt-6 grid gap-5">
         {filtered.map((item) => (
