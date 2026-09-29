@@ -1,9 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
 
-  "//": "SPA rewrite. Without this, any direct visit to a client-side route returns Vercel's 404: NOT_FOUND page, because no file exists at that path. That is why https://<app>/login 404s on a hard refresh or a shared link while clicking through from / works fine. Every non-asset path is served index.html so React Router can resolve it.",
-
-  "rewrites": [
+    "rewrites": [
     {
       "source": "/((?!assets/|favicon\\.ico|robots\\.txt|uc-logo\\.png|manifest\\.webmanifest).*)",
       "destination": "/index.html"
