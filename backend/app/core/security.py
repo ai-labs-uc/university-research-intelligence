@@ -15,8 +15,6 @@ import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -68,7 +66,7 @@ def decode_access_token(token: str) -> dict:
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: Session = Depends(get_db),
+    db=Depends(get_db),
 ) -> dict:
     """FastAPI dependency: require a valid Bearer token and return the
     calling user's row. Raise 401 with no valid token, 403 if the
@@ -81,10 +79,15 @@ def get_current_user(
 
     payload = decode_access_token(credentials.credentials)
 
-    user = db.execute(
-        text("SELECT * FROM users WHERE id=:id"),
-        {"id": payload.get("sub")},
-    ).mappings().first()
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session token",
+        )
+
+    user = db.users.find_one({"_id": user_id})
 
     if not user:
         raise HTTPException(
@@ -98,4 +101,5 @@ def get_current_user(
             detail="Account has been deactivated",
         )
 
-    return dict(user)
+    user["id"] = user["_id"]
+    return user
