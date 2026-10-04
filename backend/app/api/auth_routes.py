@@ -2,12 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-from sqlalchemy import text
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, next_id, utcnow
 from app.core.security import (
     create_access_token,
     get_current_user,
@@ -38,7 +35,7 @@ class GooglePayload(BaseModel):
 
 def _user_public(user: dict) -> dict:
     return {
-        "id": user["id"],
+        "id": user["_id"],
         "name": user["name"],
         "email": user["email"],
         "role": user["role"],
@@ -47,13 +44,12 @@ def _user_public(user: dict) -> dict:
     }
 
 
-def _issue_and_touch(db: Session, user_row: dict) -> dict:
-    db.execute(
-        text("UPDATE users SET last_login_at=NOW() WHERE id=:id"),
-        {"id": user_row["id"]},
+def _issue_and_touch(db, user_row: dict) -> dict:
+    db.users.update_one(
+        {"_id": user_row["_id"]},
+        {"$set": {"last_login_at": utcnow()}},
     )
-    db.commit()
-    token = create_access_token(user_row["id"], user_row["email"])
+    token = create_access_token(user_row["_id"], user_row["email"])
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -62,20 +58,17 @@ def _issue_and_touch(db: Session, user_row: dict) -> dict:
 
 
 @router.post("/register")
-def register(payload: RegisterPayload, db: Session = Depends(get_db)):
+def register(payload: RegisterPayload, db=Depends(get_db)):
     if len(payload.password) < 8:
         raise HTTPException(
             status_code=400,
             detail="Password must be at least 8 characters.",
         )
 
-    existing = db.execute(
-        text("SELECT * FROM users WHERE email=:email"),
-        {"email": payload.email},
-    ).mappings().first()
+    existing = db.users.find_one({"email": payload.email})
 
     if existing:
-        if existing["password_hash"]:
+        if existing.get("password_hash"):
             raise HTTPException(
                 status_code=409,
                 detail="An account with this email already exists.",
@@ -83,62 +76,47 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
         # Account exists from a prior Google sign-in with no password
         # yet — link a password onto it instead of erroring, so the
         # same person can sign in either way going forward.
-        db.execute(
-            text('''
-                UPDATE users
-                SET password_hash=:hash, name=:name
-                WHERE id=:id
-            '''),
-            {
-                "hash": hash_password(payload.password),
-                "name": payload.name or existing["name"],
-                "id": existing["id"],
-            },
+        new_hash = hash_password(payload.password)
+        new_name = payload.name or existing["name"]
+        db.users.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {"password_hash": new_hash, "name": new_name}},
         )
-        db.commit()
-        user_row = dict(existing)
-        user_row["password_hash"] = "set"
-        return _issue_and_touch(db, user_row)
+        existing["password_hash"] = new_hash
+        existing["name"] = new_name
+        return _issue_and_touch(db, existing)
 
-    result = db.execute(
-        text('''
-            INSERT INTO users (name, email, password_hash, role)
-            VALUES (:name, :email, :hash, 'RESEARCHER')
-        '''),
-        {
-            "name": payload.name,
-            "email": payload.email,
-            "hash": hash_password(payload.password),
-        },
-    )
-    db.commit()
+    user_row = {
+        "_id": next_id("users"),
+        "name": payload.name,
+        "email": payload.email,
+        "password_hash": hash_password(payload.password),
+        "google_sub": None,
+        "role": "RESEARCHER",
+        "active": True,
+        "last_login_at": None,
+        "created_at": utcnow(),
+    }
+    db.users.insert_one(user_row)
 
-    user_row = db.execute(
-        text("SELECT * FROM users WHERE id=:id"),
-        {"id": result.lastrowid},
-    ).mappings().first()
-
-    return _issue_and_touch(db, dict(user_row))
+    return _issue_and_touch(db, user_row)
 
 
 @router.post("/login")
-def login(payload: LoginPayload, db: Session = Depends(get_db)):
-    user = db.execute(
-        text("SELECT * FROM users WHERE email=:email"),
-        {"email": payload.email},
-    ).mappings().first()
+def login(payload: LoginPayload, db=Depends(get_db)):
+    user = db.users.find_one({"email": payload.email})
 
-    if not user or not verify_password(payload.password, user["password_hash"]):
+    if not user or not verify_password(payload.password, user.get("password_hash")):
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
 
     if not user["active"]:
         raise HTTPException(status_code=403, detail="Account has been deactivated.")
 
-    return _issue_and_touch(db, dict(user))
+    return _issue_and_touch(db, user)
 
 
 @router.post("/google")
-def google_login(payload: GooglePayload, db: Session = Depends(get_db)):
+def google_login(payload: GooglePayload, db=Depends(get_db)):
     if not settings.google_client_id:
         raise HTTPException(
             status_code=501,
@@ -167,40 +145,31 @@ def google_login(payload: GooglePayload, db: Session = Depends(get_db)):
     google_sub = claims["sub"]
     name = claims.get("name") or email.split("@")[0]
 
-    user = db.execute(
-        text("SELECT * FROM users WHERE email=:email OR google_sub=:sub"),
-        {"email": email, "sub": google_sub},
-    ).mappings().first()
+    user = db.users.find_one({"$or": [{"email": email}, {"google_sub": google_sub}]})
 
     if user:
-        if not user["google_sub"]:
-            db.execute(
-                text("UPDATE users SET google_sub=:sub WHERE id=:id"),
-                {"sub": google_sub, "id": user["id"]},
-            )
-            db.commit()
+        if not user.get("google_sub"):
+            db.users.update_one({"_id": user["_id"]}, {"$set": {"google_sub": google_sub}})
+            user["google_sub"] = google_sub
         if not user["active"]:
             raise HTTPException(
                 status_code=403, detail="Account has been deactivated."
             )
-        user_row = dict(user)
     else:
-        result = db.execute(
-            text('''
-                INSERT INTO users (name, email, google_sub, role)
-                VALUES (:name, :email, :sub, 'RESEARCHER')
-            '''),
-            {"name": name, "email": email, "sub": google_sub},
-        )
-        db.commit()
-        user_row = dict(
-            db.execute(
-                text("SELECT * FROM users WHERE id=:id"),
-                {"id": result.lastrowid},
-            ).mappings().first()
-        )
+        user = {
+            "_id": next_id("users"),
+            "name": name,
+            "email": email,
+            "password_hash": None,
+            "google_sub": google_sub,
+            "role": "RESEARCHER",
+            "active": True,
+            "last_login_at": None,
+            "created_at": utcnow(),
+        }
+        db.users.insert_one(user)
 
-    return _issue_and_touch(db, user_row)
+    return _issue_and_touch(db, user)
 
 
 @router.get("/me")

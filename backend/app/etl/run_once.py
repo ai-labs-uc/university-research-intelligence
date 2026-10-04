@@ -20,7 +20,7 @@ import json
 import logging
 import sys
 
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, ensure_indexes
 from app.services.notification_service import run_deadline_notifications
 from app.services.pipeline_service import run_pipeline
 
@@ -36,6 +36,11 @@ def main() -> int:
     parser.add_argument("--harvest-only", action="store_true")
     parser.add_argument("--notify-only", action="store_true")
     args = parser.parse_args()
+
+    # Idempotent -- the cron job is a separate short-lived process from
+    # the API, so it ensures the same indexes exist rather than assuming
+    # the API has already run on this database.
+    ensure_indexes()
 
     db = SessionLocal()
     exit_code = 0
@@ -64,7 +69,7 @@ def main() -> int:
 
         return exit_code
 
-    except Exception as exc:                           # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         log.exception("ETL run failed: %s", exc)
         return 1
     finally:
