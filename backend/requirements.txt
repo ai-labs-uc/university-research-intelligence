@@ -1,6 +1,5 @@
 fastapi[standard]
-sqlalchemy
-pymysql
+pymongo
 pydantic-settings
 python-jose[cryptography]
 bcrypt
