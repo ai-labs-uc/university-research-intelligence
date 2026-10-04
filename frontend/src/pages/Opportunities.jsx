@@ -91,25 +91,59 @@ export default function Opportunities() {
       })
 
       .filter((item) => {
-        return `${item.title}
-          ${item.organization}
-          ${item.summary}
-          ${category(item)}
-          `
+        return `${item.title} ${item.organization} ${item.summary} ${category(item)}`
           .toLowerCase()
           .includes(q);
       });
   }, [items, tab, query]);
 
+  // Printing captures whatever is currently filtered/searched rather than
+  // always every opportunity, so the hard copy matches what the person
+  // was actually looking at (e.g. just "Philippine Grants").
+  const activeTabLabel = TABS.find(([value]) => value === tab)?.[1] ?? "All";
+
+  const printedAt = new Date().toLocaleString("en-PH", {
+    dateStyle: "long",
+    timeStyle: "short",
+  });
+
   return (
     <div>
-      <h1 className="text-3xl font-black">Call for Papers &amp; Grants</h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black">Call for Papers &amp; Grants</h1>
 
-      <p className="mt-2 text-slate-600">
-        Research opportunities collected from official sources.
-      </p>
+          <p className="mt-2 text-slate-600">
+            Research opportunities collected from official sources.
+          </p>
+        </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
+        {/* Prints exactly what's currently filtered/searched below --
+            hidden on the printed page itself via print:hidden. */}
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="print:hidden flex h-fit items-center gap-2 rounded-xl border border-uc-700 px-4 py-2 text-sm font-semibold text-uc-700 hover:bg-uc-50"
+          title="Print a hard copy of the opportunities currently shown below"
+        >
+          Print
+        </button>
+      </div>
+
+      {/* Only rendered on paper -- gives the hard copy a header saying
+          what it is, which filter produced it, and when it was printed,
+          none of which is obvious once it's out of the browser. */}
+      <div className="hidden print:block print:mb-6">
+        <p className="text-base font-bold">Call for Papers &amp; Grants</p>
+
+        <p className="text-sm font-semibold text-slate-700">
+          {activeTabLabel} &middot; {filtered.length} opportunit{filtered.length === 1 ? "y" : "ies"}
+        </p>
+
+        <p className="text-xs text-slate-500">Printed {printedAt}</p>
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-2 print:hidden">
         {TABS.map(([value, label]) => (
           <button
             key={value}
@@ -128,18 +162,18 @@ export default function Opportunities() {
       </div>
 
       <input
-        className="mt-5 w-full rounded-xl border px-4 py-3"
+        className="mt-5 w-full rounded-xl border px-4 py-3 print:hidden"
         placeholder="Search calls and grants..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
 
       {loading && (
-        <p className="mt-6 text-slate-500">Loading opportunities…</p>
+        <p className="mt-6 text-slate-500 print:hidden">Loading opportunities…</p>
       )}
 
       {error && !loading && (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4">
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 print:hidden">
           <p className="text-sm text-red-700">{error}</p>
           <button
             onClick={() => window.location.reload()}
@@ -156,9 +190,12 @@ export default function Opportunities() {
         </p>
       )}
 
-      <div className="mt-6 grid gap-5">
+      <div className="mt-6 grid gap-5 print:mt-0 print:gap-4">
         {filtered.map((item) => (
-          <article key={item.id} className="rounded-2xl border bg-white p-6">
+          <article
+            key={item.id}
+            className="rounded-2xl border bg-white p-6 print:break-inside-avoid print:rounded-none print:border-slate-300 print:p-4"
+          >
             <div className="flex flex-wrap gap-2 text-xs font-bold uppercase">
               <span className="text-blue-700">{category(item)}</span>
 
@@ -189,10 +226,18 @@ export default function Opportunities() {
               href={item.source_url}
               target="_blank"
               rel="noreferrer"
-              className="mt-4 inline-block font-semibold text-blue-700"
+              className="mt-4 inline-block font-semibold text-blue-700 print:hidden"
             >
               Open official source →
             </a>
+
+            {/* A clickable link does nothing on paper, so the printed
+                copy shows the actual URL as text instead. */}
+            {item.source_url && (
+              <p className="mt-4 hidden text-sm break-all text-slate-600 print:block">
+                Source: {item.source_url}
+              </p>
+            )}
           </article>
         ))}
       </div>

@@ -29,3 +29,19 @@ body {
   color: #0f172a;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
+
+/*
+ * Printed hard copies (e.g. the Opportunities page's Print button) --
+ * comfortable physical margins instead of the browser's own default,
+ * and a plain white page since the app's light-gray body background
+ * only wastes ink/toner on paper.
+ */
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+
+  body {
+    background: #fff;
+  }
+}

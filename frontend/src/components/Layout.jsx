@@ -19,7 +19,9 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 flex w-64 flex-col bg-uc-950 p-6 text-white">
+      {/* print:hidden -- the sidebar nav is pure chrome, not something
+          anyone wants on a printed hard copy of a grant/CFP list. */}
+      <aside className="fixed inset-y-0 left-0 flex w-64 flex-col bg-uc-950 p-6 text-white print:hidden">
         <div className="flex items-center gap-3">
           <Logo size={36} />
           <h1 className="text-base font-black leading-tight text-balance">
@@ -66,7 +68,9 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="ml-64 p-8">
+      {/* print:ml-0/p-0 -- without the sidebar, the content shouldn't
+          keep reserving a 16rem left margin on the printed page. */}
+      <main className="ml-64 p-8 print:ml-0 print:p-0">
         <Outlet />
       </main>
     </div>
