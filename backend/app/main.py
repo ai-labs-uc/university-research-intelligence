@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth_routes import router as auth_router
 from app.api.routes import router as api_router
 from app.core.config import settings
+from app.core.database import ensure_indexes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,7 +17,6 @@ app = FastAPI(
     title="University Research Call for Paper Opportunity and Grants",
     version="1.1.0",
 )
-
 
 # CORS.
 #
@@ -52,9 +52,16 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-
 app.include_router(api_router, prefix="/api")
 app.include_router(auth_router)
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    """Create MongoDB's unique/lookup indexes on boot. Idempotent --
+    this is the entire "schema migration" MongoDB needs, so there is no
+    separate setup script to run against Atlas."""
+    ensure_indexes()
 
 
 @app.get("/health")
