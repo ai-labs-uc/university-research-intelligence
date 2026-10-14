@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth_routes import router as auth_router
+from app.api.research_routes import router as research_router
 from app.api.routes import router as api_router
 from app.core.config import settings
 from app.core.database import ensure_indexes
@@ -53,6 +54,7 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api")
+app.include_router(research_router, prefix="/api")
 app.include_router(auth_router)
 
 

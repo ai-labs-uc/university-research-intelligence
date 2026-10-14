@@ -5,6 +5,7 @@ import Logo from "./Logo"
 const nav = [
   ["/", "Dashboard"],
   ["/opportunities", "Opportunities"],
+  ["/research", "Research Registry"],
   ["/sources", "Sources"],
 ]
 

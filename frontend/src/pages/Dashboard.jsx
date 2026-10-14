@@ -17,12 +17,15 @@ export default function Dashboard() {
   });
 
   const [running, setRunning] = useState(false);
+  const [research, setResearch] = useState({ total_research: 0, by_status: {}, due_soon: 0, overdue: 0 });
 
   async function loadDashboard() {
     try {
       const response = await api.get("/api/dashboard");
 
       setData(response.data);
+      const researchResponse = await api.get("/api/research/dashboard");
+      setResearch(researchResponse.data);
     } catch (error) {
       console.error("Dashboard loading failed:", error);
     }
@@ -94,6 +97,20 @@ export default function Dashboard() {
       </div>
 
       <div className="rounded-2xl border bg-white p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h2 className="text-xl font-bold">Research Progress Monitoring</h2><p className="mt-1 text-sm text-slate-600">Institutional records visible to your role, grouped by current status.</p></div>
+          <a href="/research" className="rounded-xl border px-4 py-2 text-sm font-semibold">Manage research</a>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <ProgressCard label="Research records" value={research.total_research} />
+          <ProgressCard label="Ongoing" value={research.by_status?.ONGOING || 0} />
+          <ProgressCard label="Completed" value={research.by_status?.COMPLETED || 0} />
+          <ProgressCard label="Due within 30 days" value={research.due_soon} />
+          <ProgressCard label="Past target date" value={research.overdue} danger />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border bg-white p-6">
         <h2 className="text-xl font-bold">Research Opportunity Pipeline</h2>
 
         <p className="mt-2 text-slate-600">
@@ -113,4 +130,8 @@ function DashboardCard({ title, value }) {
       <p className="mt-3 text-3xl font-black">{value}</p>
     </div>
   );
+}
+
+function ProgressCard({ label, value, danger = false }) {
+  return <div className="rounded-xl border bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className={`mt-2 text-2xl font-black ${danger && value ? "text-red-700" : ""}`}>{value || 0}</p></div>
 }

@@ -14,6 +14,7 @@ import Register from "./pages/Register"
 import Dashboard from "./pages/Dashboard"
 import Opportunities from "./pages/Opportunities"
 import Sources from "./pages/Sources"
+import Researches from "./pages/Researches"
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/opportunities" element={<Opportunities />} />
                 <Route path="/sources" element={<Sources />} />
+                <Route path="/research" element={<Researches />} />
               </Route>
             </Route>
 

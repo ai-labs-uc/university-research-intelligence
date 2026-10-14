@@ -79,6 +79,15 @@ def ensure_indexes() -> None:
     db.researchers.create_index("email", unique=True)
     db.researchers.create_index("employee_no", unique=True, sparse=True)
 
+    # Institutional research registry.  Access is resolved by record owner
+    # and visibility, while the remaining indexes support the researcher and
+    # Research Office views without turning this collection into a staff
+    # performance store.
+    db.research_projects.create_index([("owner_id", ASCENDING), ("updated_at", ASCENDING)])
+    db.research_projects.create_index([("status", ASCENDING), ("is_deleted", ASCENDING)])
+    db.research_projects.create_index([("visibility", ASCENDING), ("is_deleted", ASCENDING)])
+    db.research_projects.create_index([("target_completion_date", ASCENDING), ("status", ASCENDING)])
+
     db.opportunity_sources.create_index("code", unique=True)
 
     db.research_opportunities.create_index("content_hash", unique=True, sparse=True)
