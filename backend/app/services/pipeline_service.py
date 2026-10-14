@@ -311,3 +311,21 @@ def _finish_run(db, run_id: int | None, report: dict) -> None:
         )
     except Exception:  # noqa: BLE001
         log.exception("Could not finalise pipeline run %s", run_id)
+
+
+# PyMongo supports datetime values but not date values. The date extractor
+# deliberately returns dates, so normalize them at the persistence boundary.
+from datetime import date
+
+_original_upsert_opportunity = _upsert_opportunity
+
+def _mongo_datetime(value):
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return datetime.combine(value, datetime.min.time())
+    return value
+
+def _upsert_opportunity(db, content_hash: str, fields: dict, deadline, now: datetime) -> None:
+    normalized_fields = {key: _mongo_datetime(value) for key, value in fields.items()}
+    return _original_upsert_opportunity(
+        db, content_hash, normalized_fields, _mongo_datetime(deadline), now
+    )
