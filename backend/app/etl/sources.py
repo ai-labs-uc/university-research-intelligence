@@ -300,3 +300,20 @@ def enabled_default_sources():
     """Return every enabled source. Kept as a function because
     pipeline_service.py imports it directly."""
     return [s for s in ALL_SOURCES if s.get("enabled", True)]
+
+
+# Approved public single-page opportunities. These are reviewed sources, not
+# social-media profiles or private groups.
+SINGLE_PAGE_CFP_SOURCES = [
+    {
+        "code": "IHSY_ISCI_2027",
+        "name": "ISCI 2027 — IEEE Symposium on Computers & Informatics",
+        "kind": "single_page",
+        "listing_url": "https://www.ihsanyassin.com/cms/conference.php?conf_short_name=isci2027",
+        "title_selector": "h1",
+        "scope": "INTERNATIONAL",
+        "require_deadline": True,
+    },
+]
+
+ALL_SOURCES += SINGLE_PAGE_CFP_SOURCES
