@@ -16,6 +16,8 @@ const typeLabels = {
   OTHER: "Other",
 }
 
+const statusColors = ["#64748b", "#d97706", "#2563eb", "#15803d", "#94a3b8"]
+
 export default function ResearchAnalytics() {
   const [analytics, setAnalytics] = useState(null)
   const [message, setMessage] = useState("")
@@ -28,6 +30,7 @@ export default function ResearchAnalytics() {
 
   const total = analytics?.total_research || 0
   const statusRows = useMemo(() => Object.entries(analytics?.by_status || {}).map(([key, value]) => ({ label: statusLabels[key] || key, value })), [analytics])
+  const visibleStatusRows = useMemo(() => statusRows.filter(row => row.value > 0), [statusRows])
   const typeRows = useMemo(() => Object.entries(analytics?.by_researcher_type || {}).filter(([, value]) => value > 0).map(([key, value]) => ({ label: typeLabels[key] || key, value })), [analytics])
 
   return (
@@ -49,12 +52,12 @@ export default function ResearchAnalytics() {
           <Metric label="Registered research" value={total} />
           <Metric label="Ongoing research" value={analytics.by_status?.ONGOING || 0} />
           <Metric label="Completed research" value={analytics.by_status?.COMPLETED || 0} />
-          <Metric label="Completion rate" value={`${analytics.completed_rate || 0}%`} />
+          <Metric label="Completion rate" value={(analytics.completed_rate || 0) + "%"} />
         </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
           <Panel title="Research status" subtitle="Current distribution of registered research">
-            <BarList rows={statusRows} total={total} colors={["#64748b", "#d97706", "#2563eb", "#15803d", "#94a3b8"]} />
+            <StatusPieChart rows={visibleStatusRows} total={total} />
           </Panel>
           <Panel title="Researcher group" subtitle="Registered projects by primary researcher group">
             <BarList rows={typeRows} total={total} colors={["#0f766e", "#7c3aed", "#db2777", "#475569"]} />
@@ -87,9 +90,30 @@ function Panel({ title, subtitle, children }) {
   return <section className="rounded-2xl border bg-white p-6 print:rounded-none print:border-slate-300 print:p-4"><h2 className="text-xl font-bold">{title}</h2><p className="mt-1 text-sm text-slate-600">{subtitle}</p><div className="mt-5">{children}</div></section>
 }
 
+function StatusPieChart({ rows, total }) {
+  if (!rows.length || !total) return <p className="py-8 text-center text-sm text-slate-500">No research records to display.</p>
+  let progress = 0
+  const segments = rows.map((row, index) => {
+    const start = progress
+    progress += (row.value / total) * 100
+    return statusColors[index % statusColors.length] + " " + start + "% " + progress + "%"
+  })
+  const gradient = "conic-gradient(" + segments.join(", ") + ")"
+
+  return <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+    <div className="relative h-48 w-48 shrink-0 rounded-full" role="img" aria-label="Research status pie chart" style={{ background: gradient, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>
+      <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-white text-center print:border">
+        <span className="text-3xl font-black">{total}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Records</span>
+      </div>
+    </div>
+    <ul className="w-full space-y-2">{rows.map((row, index) => <li key={row.label} className="flex items-center justify-between gap-3 text-sm"><span className="flex items-center gap-2 font-medium"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: statusColors[index % statusColors.length], WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} />{row.label}</span><span className="font-bold">{row.value} ({Math.round((row.value / total) * 100)}%)</span></li>)}</ul>
+  </div>
+}
+
 function BarList({ rows, total, colors }) {
   if (!rows.length) return <p className="py-8 text-center text-sm text-slate-500">No research records to display.</p>
-  return <div className="space-y-4">{rows.map((row, index) => <div key={row.label}><div className="flex items-center justify-between gap-4 text-sm"><span className="font-medium">{row.label}</span><span className="font-bold">{row.value}</span></div><div className="mt-1.5 h-3 overflow-hidden rounded-full bg-slate-100 print:border"><div className="h-full rounded-full" style={{ width: `${total ? Math.max((row.value / total) * 100, row.value ? 3 : 0) : 0}%`, backgroundColor: colors[index % colors.length] }} /></div></div>)}</div>
+  return <div className="space-y-4">{rows.map((row, index) => <div key={row.label}><div className="flex items-center justify-between gap-4 text-sm"><span className="font-medium">{row.label}</span><span className="font-bold">{row.value}</span></div><div className="mt-1.5 h-3 overflow-hidden rounded-full bg-slate-100 print:border"><div className="h-full rounded-full" style={{ width: (total ? Math.max((row.value / total) * 100, row.value ? 3 : 0) : 0) + "%", backgroundColor: colors[index % colors.length], WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} /></div></div>)}</div>
 }
 
 function formatDate(value) {
