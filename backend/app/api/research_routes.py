@@ -46,6 +46,7 @@ class ResearchCreate(BaseModel):
     target_completion_date: date | None = None
     funding_source: str | None = Field(default=None, max_length=300)
     outputs: list[str] = Field(default_factory=list, max_length=20)
+    progress_percent: int = Field(default=0, ge=0, le=100)
     milestones: list[MilestoneInput] = Field(default_factory=list, max_length=20)
 
 
@@ -218,7 +219,7 @@ def create_research(payload: ResearchCreate, user: dict = Depends(get_current_us
         "owner_name": user["name"],
         "is_validated": _is_admin(user),
         "is_deleted": False,
-        "progress_percent": 100 if values["status"] == "COMPLETED" else 0,
+        "progress_percent": 100 if values["status"] == "COMPLETED" else int(values.get("progress_percent") or 0),
         "progress_updates": [],
         "created_at": now,
         "updated_at": now,
