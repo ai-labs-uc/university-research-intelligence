@@ -19,6 +19,8 @@ export default function Researches() {
   const [saving, setSaving] = useState(false)
   const [recommendations, setRecommendations] = useState([])
   const [selected, setSelected] = useState(null)
+  
+  
 
   async function load() {
     try {
@@ -27,9 +29,19 @@ export default function Researches() {
     } catch (error) {
       setMessage(errorMessage(error, "Could not load research records."))
     }
-  }
+  }  useEffect(() => { load() }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (!selected) return
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }))
+    return () => cancelAnimationFrame(frame)
+  }, [selected])
+
+  useEffect(() => {
+    if (!recommendations.length) return
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }))
+    return () => cancelAnimationFrame(frame)
+  }, [recommendations])
 
   const heading = editing ? "Edit research record" : "Add research record"
   const visibleRecords = useMemo(() => records, [records])
