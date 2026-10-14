@@ -29,7 +29,7 @@ export default function Layout() {
         <p className="mt-2 text-xs text-uc-200">University Research Office</p>
         <nav className="mt-5 flex gap-2 overflow-x-auto pb-1 lg:mt-8 lg:block lg:space-y-2 lg:overflow-visible lg:pb-0">
           {nav.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) =>               `shrink-0 rounded-xl px-4 py-3 text-sm lg:block ${isActive ? "bg-white text-uc-900" : "text-uc-100 hover:bg-white/10"}`
+            <NavLink key={to} to={to} end className={({ isActive }) =>               `shrink-0 rounded-xl px-4 py-3 text-sm lg:block ${isActive ? "bg-white text-uc-900" : "text-uc-100 hover:bg-white/10"}`
             }>{label}</NavLink>
           ))}
         </nav>
