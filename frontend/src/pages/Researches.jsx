@@ -4,10 +4,10 @@ import api, { errorMessage } from "../api/client"
 const emptyForm = {
   title: "", abstract: "", college_or_unit: "", researcher_type: "FACULTY",
   researchers: "", keywords: "", status: "DRAFT", visibility: "INSTITUTIONAL",
-  target_completion_date: "", funding_source: "", progress_percent: 0,
+  start_date: "", approved_duration_months: "", target_completion_date: "", funding_source: "", progress_percent: 0,
 }
 
-const splitList = value => value.split(",").map(item => item.trim()).filter(Boolean)
+const splitList = value => value.split(",").map(item => item.trim()).filter(Boolean); const proposalTargetDate = (startDate, months) => { if (!startDate || !months || Number(months) < 1) return ""; const [year, month, day] = startDate.split("-").map(Number); const finalMonth = new Date(Date.UTC(year, month - 1 + Number(months) + 1, 0)); return [finalMonth.getUTCFullYear(), String(finalMonth.getUTCMonth() + 1).padStart(2, "0"), String(Math.min(day, finalMonth.getUTCDate())).padStart(2, "0")].join("-") }
 
 export default function Researches() {
   const [records, setRecords] = useState([])
@@ -43,7 +43,7 @@ export default function Researches() {
       title: record.title || "", abstract: record.abstract || "", college_or_unit: record.college_or_unit || "",
       researcher_type: record.researcher_type || "FACULTY", researchers: (record.researchers || []).join(", "),
       keywords: (record.keywords || []).join(", "), status: record.status || "DRAFT",
-      visibility: record.visibility || "INSTITUTIONAL", target_completion_date: record.target_completion_date ? String(record.target_completion_date).slice(0, 10) : "",
+      visibility: record.visibility || "INSTITUTIONAL", start_date: record.start_date ? String(record.start_date).slice(0, 10) : "", approved_duration_months: record.approved_duration_months || "", target_completion_date: record.target_completion_date ? String(record.target_completion_date).slice(0, 10) : "",
       funding_source: record.funding_source || "", progress_percent: record.progress_percent || 0,
     })
   }
@@ -58,8 +58,8 @@ export default function Researches() {
     const payload = {
       ...form,
       researchers: splitList(form.researchers), keywords: splitList(form.keywords),
-      progress_percent: Number(form.progress_percent || 0),
-      target_completion_date: form.target_completion_date || null,
+      progress_percent: Number(form.progress_percent || 0), start_date: form.start_date || null, approved_duration_months: form.approved_duration_months ? Number(form.approved_duration_months) : undefined,
+      target_completion_date: proposalTargetDate(form.start_date, form.approved_duration_months) || form.target_completion_date || null,
       funding_source: form.funding_source || null,
     }
     try {
@@ -123,7 +123,7 @@ export default function Researches() {
             <div className="grid gap-3 sm:grid-cols-2"><Select label="Researcher type" value={form.researcher_type} onChange={value => setForm({ ...form, researcher_type: value })} options={["FACULTY", "NON_TEACHING_STAFF", "STUDENT", "OTHER"]} /><Select label="Status" value={form.status} onChange={value => setForm({ ...form, status: value })} options={["DRAFT", "PENDING_REVIEW", "ONGOING", "COMPLETED", "ARCHIVED"]} /></div>
             <Field label="Researchers (comma-separated)" value={form.researchers} onChange={value => setForm({ ...form, researchers: value })} />
             <Field label="Keywords (comma-separated)" value={form.keywords} onChange={value => setForm({ ...form, keywords: value })} />
-            <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Target completion<input type="date" value={form.target_completion_date} onChange={e => setForm({ ...form, target_completion_date: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="text-sm font-semibold">Progress %<input type="number" min="0" max="100" value={form.progress_percent} onChange={e => setForm({ ...form, progress_percent: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label></div>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Proposal start date<input type="date" required value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label><label className="text-sm font-semibold">Approved duration (months)<input type="number" required min="1" max="120" value={form.approved_duration_months} onChange={e => setForm({ ...form, approved_duration_months: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label></div><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Calculated proposal target completion<input type="date" readOnly value={proposalTargetDate(form.start_date, form.approved_duration_months) || form.target_completion_date} className="mt-1 w-full rounded-lg border bg-slate-50 px-3 py-2 font-normal text-slate-600" /></label><label className="text-sm font-semibold">Progress %<input type="number" min="0" max="100" value={form.progress_percent} onChange={e => setForm({ ...form, progress_percent: e.target.value })} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" /></label></div>
             <Field label="Funding source" value={form.funding_source} onChange={value => setForm({ ...form, funding_source: value })} />
             <label className="block text-sm font-semibold">Research document (PDF, DOC, or DOCX; up to 10 MB)<input type="file" accept=".pdf,.doc,.docx" onChange={e => setFile(e.target.files?.[0] || null)} className="mt-1 block w-full text-sm font-normal" /></label>
             <div className="flex gap-2"><button disabled={saving} className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50">{saving ? "Saving..." : "Save record"}</button>{editing && <button type="button" onClick={reset} className="rounded-lg border px-4 py-2">Cancel</button>}</div>
