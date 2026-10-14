@@ -99,7 +99,7 @@ export default function Dashboard() {
       <div className="rounded-2xl border bg-white p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-xl font-bold">Research Progress Monitoring</h2><p className="mt-1 text-sm text-slate-600">Institutional records visible to your role, grouped by current status.</p></div>
-          <a href="/research" className="rounded-xl border px-4 py-2 text-sm font-semibold">Manage research</a>
+          <div className="flex gap-2"><a href="/research" className="rounded-xl border px-4 py-2 text-sm font-semibold">Manage research</a><a href="/research/analytics" className="rounded-xl border border-uc-700 px-4 py-2 text-sm font-semibold text-uc-800">View analytics</a></div>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <ProgressCard label="Research records" value={research.total_research} />

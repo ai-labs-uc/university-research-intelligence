@@ -6,6 +6,7 @@ const nav = [
   ["/", "Dashboard"],
   ["/opportunities", "Opportunities"],
   ["/research", "Research Registry"],
+  ["/research/analytics", "Research Analytics"],
   ["/sources", "Sources"],
 ]
 

@@ -14,9 +14,13 @@ calls for papers and grants continue to be collected from configured sources.
 - Upload a PDF, DOC, or DOCX research document up to 10 MB. Attachments are
   stored in MongoDB GridFS rather than local Render disk.
 - Match a research record to live calls for papers and grants using transparent
-  keyword overlap. A match always displays its matching terms.
+  keyword overlap. Every match is labelled as a national or international
+  grant / call for papers, and displays the matching terms and deadline cue.
+- View and print a selected research record, including its metadata, progress,
+  and matching opportunities.
 - Show a role-aware progress summary for total, ongoing, completed, due-soon,
-  and overdue records.
+  and overdue records, plus a printable analytics report by status,
+  researcher group, college or unit, and research start year.
 
 ## Access and governance
 
@@ -39,6 +43,7 @@ calls for papers and grants continue to be collected from configured sources.
 | POST /api/research/{id}/progress | Add a documented progress update |
 | POST /api/research/{id}/validate | Research Office validation |
 | GET /api/research/{id}/recommendations | Explainable call-for-paper / grant matches |
+| GET /api/research/analytics | Printable, role-aware registry analytics |
 | GET/POST /api/research/{id}/attachments | List or upload an attachment |
 | GET/DELETE /api/research/{id}/attachments/{attachment_id} | Download or delete an attachment |
 | GET /api/research/dashboard | Progress monitoring summary |

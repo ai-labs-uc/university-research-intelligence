@@ -127,6 +127,35 @@ def _can_edit(record: dict, user: dict) -> bool:
     return _is_admin(user) or record["owner_id"] == user["_id"]
 
 
+def _visible_research_query(user: dict) -> dict:
+    query: dict = {"is_deleted": {"$ne": True}}
+    if not _is_admin(user):
+        query["$or"] = [{"owner_id": user["_id"]}, {"visibility": "INSTITUTIONAL"}]
+    return query
+
+
+def _as_date(value) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    return value if isinstance(value, date) else None
+
+
+def _opportunity_scope(opportunity: dict) -> str:
+    scope = (opportunity.get("scope_type") or "").upper()
+    category = (opportunity.get("category") or "").upper()
+    if scope in {"NATIONAL", "INTERNATIONAL"}:
+        return scope
+    if "INTERNATIONAL" in category:
+        return "INTERNATIONAL"
+    return "NATIONAL"
+
+
+def _opportunity_kind(opportunity: dict) -> str:
+    kind = (opportunity.get("opportunity_type") or "").upper()
+    category = (opportunity.get("category") or "").upper()
+    return "GRANT" if kind == "GRANT" or category.startswith("GRANT") else "CALL_FOR_PAPER"
+
+
 def _terms(record: dict) -> set[str]:
     text = " ".join([
         record.get("title", ""), record.get("abstract", ""),
@@ -190,9 +219,7 @@ def create_research(payload: ResearchCreate, user: dict = Depends(get_current_us
 
 @router.get("/dashboard")
 def research_dashboard(user: dict = Depends(get_current_user), db=Depends(get_db)):
-    match: dict = {"is_deleted": {"$ne": True}}
-    if not _is_admin(user):
-        match["$or"] = [{"owner_id": user["_id"]}, {"visibility": "INSTITUTIONAL"}]
+    match = _visible_research_query(user)
     rows = list(db.research_projects.find(match, {"status": 1, "target_completion_date": 1, "progress_percent": 1, "milestones": 1}))
     counts = {name: 0 for name in STATUSES}
     today = date.today()
@@ -209,6 +236,55 @@ def research_dashboard(user: dict = Depends(get_current_user), db=Depends(get_db
             elif target <= today + timedelta(days=30):
                 due_soon += 1
     return {"total_research": len(rows), "by_status": counts, "due_soon": due_soon, "overdue": overdue}
+
+
+@router.get("/analytics")
+def research_analytics(user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """Return printable, role-aware analytics for registered research.
+
+    The endpoint reports registry metadata, not productivity scores.  It keeps
+    restricted records visible only to their owner and Research Office roles.
+    """
+    rows = list(db.research_projects.find(_visible_research_query(user), {
+        "title": 1, "status": 1, "researcher_type": 1, "college_or_unit": 1,
+        "start_date": 1, "target_completion_date": 1, "progress_percent": 1,
+        "funding_source": 1, "visibility": 1,
+    }))
+    status_counts = {name: 0 for name in STATUSES}
+    type_counts = {name: 0 for name in PEOPLE_TYPES}
+    unit_counts: dict[str, int] = {}
+    year_counts: dict[str, int] = {}
+    active_progress: list[int] = []
+    for row in rows:
+        status_name = row.get("status", "DRAFT")
+        type_name = row.get("researcher_type", "OTHER")
+        status_counts[status_name] = status_counts.get(status_name, 0) + 1
+        type_counts[type_name] = type_counts.get(type_name, 0) + 1
+        unit = row.get("college_or_unit") or "Unspecified unit"
+        unit_counts[unit] = unit_counts.get(unit, 0) + 1
+        started = _as_date(row.get("start_date"))
+        if started:
+            year_counts[str(started.year)] = year_counts.get(str(started.year), 0) + 1
+        if status_name == "ONGOING":
+            active_progress.append(int(row.get("progress_percent") or 0))
+
+    total = len(rows)
+    return {
+        "generated_at": utcnow(),
+        "total_research": total,
+        "by_status": status_counts,
+        "by_researcher_type": type_counts,
+        "by_college_or_unit": [
+            {"label": label, "value": value}
+            for label, value in sorted(unit_counts.items(), key=lambda item: (-item[1], item[0]))[:10]
+        ],
+        "by_start_year": [
+            {"label": label, "value": value}
+            for label, value in sorted(year_counts.items())
+        ],
+        "completed_rate": round((status_counts.get("COMPLETED", 0) / total) * 100, 1) if total else 0,
+        "ongoing_average_progress": round(sum(active_progress) / len(active_progress), 1) if active_progress else 0,
+    }
 
 
 @router.get("/{research_id}")
@@ -360,13 +436,24 @@ def recommendations(research_id: int, user: dict = Depends(get_current_user), db
         return []
     candidates = db.research_opportunities.find({"is_current": True, "status": {"$ne": "CLOSED"}})
     matched = []
+    today = date.today()
     for opportunity in candidates:
+        deadline = _as_date(opportunity.get("deadline"))
+        if deadline and deadline < today:
+            continue
         opportunity_text = " ".join([opportunity.get("title", ""), opportunity.get("summary", ""), opportunity.get("organization", "")]).lower()
         overlap = sorted(term for term in terms if re.search(rf"\b{re.escape(term)}\b", opportunity_text))
         if overlap:
+            kind = _opportunity_kind(opportunity)
+            scope = _opportunity_scope(opportunity)
+            days_remaining = (deadline - today).days if deadline else None
+            reasons = [f"Matches research terms: {', '.join(overlap[:5])}", f"{scope.title()} {kind.replace('_', ' ').title()}"]
+            if days_remaining is not None:
+                reasons.append(f"Closes in {days_remaining} day{'s' if days_remaining != 1 else ''}")
             matched.append({
                 "id": opportunity["_id"], "title": opportunity.get("title"), "organization": opportunity.get("organization"),
-                "category": opportunity.get("category"), "deadline": opportunity.get("deadline"), "source_url": opportunity.get("source_url"),
-                "score": len(overlap), "reasons": [f"Matches: {', '.join(overlap[:5])}"],
+                "category": opportunity.get("category"), "deadline": deadline, "source_url": opportunity.get("source_url"),
+                "opportunity_type": kind, "scope": scope, "days_remaining": days_remaining,
+                "score": len(overlap), "reasons": reasons,
             })
     return sorted(matched, key=lambda item: (-item["score"], item["title"] or ""))[:10]
