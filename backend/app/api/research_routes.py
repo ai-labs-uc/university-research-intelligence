@@ -42,7 +42,7 @@ class ResearchCreate(BaseModel):
     sdgs: list[int] = Field(default_factory=list, max_length=17)
     status: str = "DRAFT"
     visibility: str = "INSTITUTIONAL"
-    start_date: date | None = None
+    start_date: date | None = None; approved_duration_months: int | None = Field(default=None, ge=1, le=120)
     target_completion_date: date | None = None
     funding_source: str | None = Field(default=None, max_length=300)
     outputs: list[str] = Field(default_factory=list, max_length=20)
@@ -60,7 +60,7 @@ class ResearchUpdate(BaseModel):
     sdgs: list[int] | None = Field(default=None, max_length=17)
     status: str | None = None
     visibility: str | None = None
-    start_date: date | None = None
+    start_date: date | None = None; approved_duration_months: int | None = Field(default=None, ge=1, le=120)
     target_completion_date: date | None = None
     funding_source: str | None = Field(default=None, max_length=300)
     outputs: list[str] | None = Field(default=None, max_length=20)
