@@ -101,6 +101,16 @@ def _validate_values(values: dict) -> dict:
         values["sdgs"] = sorted(set(values["sdgs"]))
     if "milestones" in values and values["milestones"] is not None:
         values["milestones"] = [item.model_dump() for item in values["milestones"]]
+        # PyMongo supports datetime but not date. Convert HTML date inputs
+    # before storing so registry entries and dashboard monitoring work.
+    for key in ("start_date", "target_completion_date"):
+        if isinstance(values.get(key), date) and not isinstance(values[key], datetime):
+            values[key] = datetime.combine(values[key], datetime.min.time())
+    if values.get("milestones") is not None:
+        for milestone in values["milestones"]:
+            due_date = milestone.get("due_date")
+            if isinstance(due_date, date) and not isinstance(due_date, datetime):
+                milestone["due_date"] = datetime.combine(due_date, datetime.min.time())
     return values
 
 
