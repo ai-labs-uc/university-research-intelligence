@@ -33,13 +33,19 @@ export default function Researches() {
 
   useEffect(() => {
     if (!selected) return
-    const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }))
+    const frame = requestAnimationFrame(() => {
+      const target = Array.from(document.querySelectorAll("h2")).filter(heading => heading.textContent === selected.title).at(-1)
+      target?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
     return () => cancelAnimationFrame(frame)
   }, [selected])
 
   useEffect(() => {
     if (!recommendations.length) return
-    const frame = requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }))
+    const frame = requestAnimationFrame(() => {
+      const target = Array.from(document.querySelectorAll("h3")).find(heading => heading.textContent === "Recommended calls and grants")
+      target?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
     return () => cancelAnimationFrame(frame)
   }, [recommendations])
 
