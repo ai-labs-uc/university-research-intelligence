@@ -324,3 +324,19 @@ def fetch_detail(url: str) -> str:
     for tag in soup(["script", "style", "nav", "header", "footer", "form"]):
         tag.decompose()
     return strip_boilerplate(soup.get_text("\n"))
+
+
+def collect_single_page(source: dict) -> list[dict]:
+    """Collect one approved, public opportunity page as a candidate item."""
+    soup = fetch_soup(source["listing_url"])
+    if not soup:
+        return []
+    title_node = soup.select_one(source.get("title_selector", "h1"))
+    title = title_node.get_text(" ", strip=True) if title_node else source.get("name", "")
+    body = strip_boilerplate(soup.get_text(" ", strip=True))
+    if not title or not body:
+        return []
+    return [_item(title, source["listing_url"], body)]
+
+
+_COLLECTORS["single_page"] = collect_single_page
